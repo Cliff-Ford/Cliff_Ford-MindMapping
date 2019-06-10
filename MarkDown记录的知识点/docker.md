@@ -19,6 +19,312 @@
 
 #### 常用命令
 
-##### docker run hello-world
+##### <font color=red>docker version</font>
+
+查看docker的版本信息
+
+```
+Client: Docker Engine - Community
+ Version:           18.09.2
+ API version:       1.39
+ Go version:        go1.10.8
+ Git commit:        6247962
+ Built:             Sun Feb 10 04:12:31 2019
+ OS/Arch:           windows/amd64
+ Experimental:      false
+
+Server: Docker Engine - Community
+ Engine:
+  Version:          18.09.2
+  API version:      1.39 (minimum version 1.12)
+  Go version:       go1.10.6
+  Git commit:       6247962
+  Built:            Sun Feb 10 04:13:06 2019
+  OS/Arch:          linux/amd64
+  Experimental:     false
+```
+
+
+
+##### <font color=red>docker info</font>
+
+查看docker现在的运行信息，比version更详细，包含docker正在运行的容器，安装了哪些镜像等
+
+```
+Containers: 2
+ Running: 0
+ Paused: 0
+ Stopped: 2
+Images: 1
+Server Version: 18.09.2
+Storage Driver: overlay2
+ Backing Filesystem: extfs
+ Supports d_type: true
+ Native Overlay Diff: true
+Logging Driver: json-file
+Cgroup Driver: cgroupfs
+Plugins:
+ Volume: local
+ Network: bridge host macvlan null overlay
+ Log: awslogs fluentd gcplogs gelf journald json-file local logentries splunk syslog
+Swarm: inactive
+Runtimes: runc
+Default Runtime: runc
+Init Binary: docker-init
+containerd version: 9754871865f7fe2f4e74d43e2fc7ccd237edcbce
+runc version: 09c8266bf2fcf9519a651b04ae54c967b9ab86ec
+init version: fec3683
+Security Options:
+ seccomp
+  Profile: default
+Kernel Version: 4.9.125-linuxkit
+Operating System: Docker for Windows
+OSType: linux
+Architecture: x86_64
+CPUs: 2
+Total Memory: 1.196GiB
+Name: linuxkit-00155d976006
+ID: OQFJ:MOE3:LBIN:OJGD:SO7U:NUGG:WEFE:LSNO:PAOZ:6LG4:SWVJ:D4DJ
+Docker Root Dir: /var/lib/docker
+Debug Mode (client): false
+Debug Mode (server): true
+ File Descriptors: 22
+ Goroutines: 47
+ System Time: 2019-06-10T05:30:14.6230217Z
+ EventsListeners: 1
+Registry: https://index.docker.io/v1/
+Labels:
+Experimental: false
+Insecure Registries:
+ 127.0.0.0/8
+Registry Mirrors:
+ https://22nfujc0.mirror.aliyuncs.com/
+Live Restore Enabled: false
+Product License: Community Engine
+```
+
+##### <font color=red>docker --help</font>
+
+如果忘记docker的命令了，可以这样查看
+
+```
+Usage:  docker [OPTIONS] COMMAND
+
+A self-sufficient runtime for containers
+
+Options:
+      --config string      Location of client config files (default
+                           "C:\\Users\\Cliff_Ford\\.docker")
+  -D, --debug              Enable debug mode
+  -H, --host list          Daemon socket(s) to connect to
+  -l, --log-level string   Set the logging level
+                           ("debug"|"info"|"warn"|"error"|"fatal")
+                           (default "info")
+      --tls                Use TLS; implied by --tlsverify
+      --tlscacert string   Trust certs signed only by this CA (default
+                           "C:\\Users\\Cliff_Ford\\.docker\\ca.pem")
+      --tlscert string     Path to TLS certificate file (default
+                           "C:\\Users\\Cliff_Ford\\.docker\\cert.pem")
+      --tlskey string      Path to TLS key file (default
+                           "C:\\Users\\Cliff_Ford\\.docker\\key.pem")
+      --tlsverify          Use TLS and verify the remote
+  -v, --version            Print version information and quit
+
+Management Commands:
+  builder     Manage builds
+  config      Manage Docker configs
+  container   Manage containers
+  image       Manage images
+  network     Manage networks
+  node        Manage Swarm nodes
+  plugin      Manage plugins
+  secret      Manage Docker secrets
+  service     Manage services
+  stack       Manage Docker stacks
+  swarm       Manage Swarm
+  system      Manage Docker
+  trust       Manage trust on Docker images
+  volume      Manage volumes
+
+Commands:
+  attach      Attach local standard input, output, and error streams to a running container
+  build       Build an image from a Dockerfile
+  commit      Create a new image from a container's changes
+  cp          Copy files/folders between a container and the local filesystem
+  create      Create a new container
+  diff        Inspect changes to files or directories on a container's filesystem
+  events      Get real time events from the server
+  exec        Run a command in a running container
+  export      Export a container's filesystem as a tar archive
+  history     Show the history of an image
+  images      List images
+  import      Import the contents from a tarball to create a filesystem image
+  info        Display system-wide information
+  inspect     Return low-level information on Docker objects
+  kill        Kill one or more running containers
+  load        Load an image from a tar archive or STDIN
+  login       Log in to a Docker registry
+  logout      Log out from a Docker registry
+  logs        Fetch the logs of a container
+  pause       Pause all processes within one or more containers
+  port        List port mappings or a specific mapping for the container
+  ps          List containers
+  pull        Pull an image or a repository from a registry
+  push        Push an image or a repository to a registry
+  rename      Rename a container
+  restart     Restart one or more containers
+  rm          Remove one or more containers
+  rmi         Remove one or more images
+  run         Run a command in a new container
+  save        Save one or more images to a tar archive (streamed to STDOUT by default)
+  search      Search the Docker Hub for images
+  start       Start one or more stopped containers
+  stats       Display a live stream of container(s) resource usage statistics
+  stop        Stop one or more running containers
+  tag         Create a tag TARGET_IMAGE that refers to SOURCE_IMAGE
+  top         Display the running processes of a container
+  unpause     Unpause all processes within one or more containers
+  update      Update configuration of one or more containers
+  version     Show the Docker version information
+  wait        Block until one or more containers stop, then print their exit codes
+
+Run 'docker COMMAND --help' for more information on a command.
+```
+
+<font color=red>docker [OPTIONS] COMMAND</font>  怎么看？怎么用？
+
+1. docker 是命令前缀，必须且不可更改
+
+2. [OPTIONS] 可选项，***-v*** 表示版本，***-D*** 表示debug，可选项可以连着用 ***-DH***，也可以全称 ***--version***
+3. COMMAND 表示命令
+
+<font color=red>Run 'docker COMMAND --help' for more information on a command.</font>表示用docker run --help查找run命令的帮助信息
+
+##### <font color=red>docker images [options]</font>
+
+查看本地的镜像
+
+```
+C:\Users\Cliff_Ford>docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+hello-world         latest              fce289e99eb9        5 months ago        1.84kB
+```
+
+返回结果参数讲解
+
+| repository                 | tag                | image id | created      | size     |
+| -------------------------- | ------------------ | -------- | ------------ | -------- |
+| 镜像的仓库源，相当于镜像名 | 标签，相当于版本号 | 镜像id   | 镜像创建时间 | 镜像大小 |
+
+1. docker images -a 表示列出本地所有镜像的所有信息
+2. docker images -p 表示列出本地所有镜像的所有id
+3. docker images --help 查看查看images命令的更多信息
+
+##### <font color=red>docker search target-image-name</font>
+
+docker search tomcat 在docker查找tomcat的镜像
+
+##### <font color=red>docker pull target-image-name</font>
+
+docker pull tomcat 下载tomcat镜像，默认最新版本
+
+##### <font color=red>docker run target-image-name</font>
+
+docker run hello-world
 
 docker window版安装完并启动之后，会生成一个daemon后台线程来处理命令，cmd窗口相当于一个client，输入docker run hello-world并回车，告诉后台线程执行hello-world这个容器，docker就会在本机寻找该容器，如果容器没有就会去找相应镜像，然后创建该容器，如果镜像也没有，就会去仓库拉取该镜像，再利用拉到的镜像创建容器，再执行。
+
+##### <font color=red>docker ps [options]</font>
+
+列出所有正在运行的容器
+
+##### <font color=red>docker退出容器</font>
+
+1. exit 容器会被关闭，重新进入需要start
+2. ctrl+P+Q 容器会被挂起，重新进去不需要start，但要用指定命令进去，***docker attach target-container-name|target-container-id*** ,当然也有另一种不进去容器，即可操作容器的方法 ***docker exec -t target-container-name|target-container-id command*** 表示进入到指定的容器，执行什么命令，结果返回到宿主机，通常该命令形式如下
+
+<center>docker exec -t container-id ls</center>
+
+##### <font color=red>docker start target-container-name|target-container-id</font>
+
+根据指定容器名或者id启动容器
+
+##### <font color=red>docker restart target-container-name|target-container-id</font>
+
+根据指定容器名或者id重启容器
+
+##### <font color=red>docker stop target-container-name|target-container-id</font>
+
+正常停止指定容器
+
+##### <font color=red>docker kill target-container-name|target-container-id</font>
+
+强制停止指定容器
+
+##### <font color=red>docker logs -f -t --tail</font>
+
+-t是加入时间戳
+
+-f是跟随最新的日志打印
+
+--tail数字，显示最后多少条
+
+##### <font color=red>docker inspect target-container-id</font>
+
+查看指定容器内部细节
+
+#### Docker是怎么工作的
+
+Docker是一个Client-Server结构的系统，Docker守护进程运行在主机上，然后通过Socket链接从客户端访问，守护进程从客户端接收命令并管理运行在主机上的容器。容器，是一个运行时环境，就是理解上的集装箱
+
+#### Docker比VM快的原因
+
+1. docker有着比虚拟机更少的抽象层。由于docker不需要Hypervisor实现硬件资源虚拟化，运行在docker容器上的程序直接使用的都是实际物理机的硬件资源。因此在Cpu、内存利用率上docker将会比VM有明显优势
+2. docker利用的是宿主机的内核，而不需要Guest OS。因此，当新建一个容器时，docker不需要和虚拟机一样重新加载一个操作系统内核，从而避免引寻、加载操作系统内核等比较费时费资源的过程，当新建一个虚拟机软件需要加载Guest OS，新建过程是分钟级别的，而docker是秒级的
+
+|            | Docker容器              | 虚拟机（VM）                |
+| ---------- | ----------------------- | --------------------------- |
+| 操作系统   | 与宿主机共享OS          | 宿主机OS上面运行虚拟机OS    |
+| 存储大小   | 镜像小，便于存储与传输  | 镜像庞大                    |
+| 运行性能   | 几乎无额外性能损失      | 操作系统额外的CPU、内存消耗 |
+| 移植性     | 轻便、灵活、适应于Linux | 笨重，与虚拟化技术耦合度高  |
+| 硬件亲和性 | 面向软件开发者          | 面向硬件运维者              |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
