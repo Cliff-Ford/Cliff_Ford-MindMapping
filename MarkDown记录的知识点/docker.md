@@ -236,7 +236,7 @@ docker window版安装完并启动之后，会生成一个daemon后台线程来�
 
 ##### <font color=red>docker ps [options]</font>
 
-列出所有正在运行的容器
+列出所有正在运行的容器，-it交互形式运行容器，-d后台运行容器
 
 ##### <font color=red>docker退出容器</font>
 
@@ -273,6 +273,14 @@ docker window版安装完并启动之后，会生成一个daemon后台线程来�
 
 查看指定容器内部细节
 
+##### <font color=red>docker cp target-container-name|target-container-id:source-contents target-contents</font>
+
+将容器内指定目录文件拷贝到目标路径
+
+##### <font color=red>docker commit -a="author" -m="describe" target-id|target-name namespace/image-name:tag</font>
+
+以哪个镜像为目标重新生成一个新的镜像发布到docker供其他人下载使用
+
 #### Docker是怎么工作的
 
 Docker是一个Client-Server结构的系统，Docker守护进程运行在主机上，然后通过Socket链接从客户端访问，守护进程从客户端接收命令并管理运行在主机上的容器。容器，是一个运行时环境，就是理解上的集装箱
@@ -290,13 +298,19 @@ Docker是一个Client-Server结构的系统，Docker守护进程运行在主机�
 | 移植性     | 轻便、灵活、适应于Linux | 笨重，与虚拟化技术耦合度高  |
 | 硬件亲和性 | 面向软件开发者          | 面向硬件运维者              |
 
+#### Docker镜像
 
+docker镜像实际上由一层一层的文件系统组成，这种层级的文件系统UnionFS。
 
+bootfs(boot file system)主要包含bootloader和kernel，bootloader主要是一i难道加载kernel，Linux刚启动时会加载bootfs文件系统，在docker镜像的最底层时bootfs。这一层与我们典型的Linux/Unix系统时一样的，包含boot加载器和内核，当boot加载完之后整个内核就都在内存中了，此时内存的使用权由bootfs转交给内核，此时系统也会卸载bootfs
 
+rootfs(root file system)，在bootfs之上，包含的就是典型Linux系统中的/dev，/proc，/bin，/etc等标准目录和文件。rootfs就是各种不同的操作系统发行版，比如ubuntu,centos等等
 
+![镜像打包示意图](D:\02_个人文档\照片\16[00_13_33][20190611-110545].png)
 
+<center>tomcat镜像打包示意图</center>
 
-
+docker pull tomcat时发现有400多M，为什么这么大呢？因为镜像时在搬楼，它把运行tomcat需要的所有环境自下而上的打包了出来，从操作系统内核kernel->centos->jdk8->tomcat全部打包，这也是为什么镜像换环境也不容易出错的原因
 
 
 
