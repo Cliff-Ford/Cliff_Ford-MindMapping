@@ -312,9 +312,91 @@ rootfs(root file system)，在bootfs之上，包含的就是典型Linux系统中
 
 docker pull tomcat时发现有400多M，为什么这么大呢？因为镜像时在搬楼，它把运行tomcat需要的所有环境自下而上的打包了出来，从操作系统内核kernel->centos->jdk8->tomcat全部打包，这也是为什么镜像换环境也不容易出错的原因
 
+#### DockerFile
 
+DockerFile是用来构建Docker镜像的构建文件，是由一系列命令和参数构成的脚本
 
+以centos镜像为例
 
+```
+# FROM 代表继承，scratch相当于Java中的Object类，scratch是所有镜像的基础镜像
+FROM scratch
+# ADD 添加一个压缩文件
+ADD centos-7-x86_64-docker.tar.xz /
+# 该镜像的一些标签
+LABEL org.label-schema.schema-version="1.0" \
+    org.label-schema.name="CentOS Base Image" \
+    org.label-schema.vendor="CentOS" \
+    org.label-schema.license="GPLv2" \
+    org.label-schema.build-date="20190305"
+# docker run image 后默认执行的一条命令
+CMD ["/bin/bash"]
+```
+
+#### DockerFile构建过程解析
+
+1. DockerFile内容基础知识
+
+   * 每条保留字指令都必须为大写字母且后面要跟至少一个参数
+   * 指令按照从上到下，顺序执行
+   * #表示注释
+   * 每条指令都会创建一个新的镜像层，并对镜像层进行提交
+
+2. Docker执行DockerFile的大致流程
+
+   1. docker从基础镜像运行一个容器
+   2. 执行一条指令并对容器做出修改
+   3. 执行类似docker commit的操作提交一个新的镜像层
+   4. docker再给予刚提交的镜像运行一个新容器
+   5. 执行dockerfile中下一条指令直到所有指令都执行完成
+
+3. 小总结
+
+   从应用软件的角度来看，DockerFile、Docker镜像与Docker容器分别代表软件的三个不同阶段
+
+   * DockerFile是软件的原材料
+   * Docker镜像是软件的交付品
+   * Docker容器则可以认为是软件的运行态
+
+   DockerFile面向开发，Docker镜像成为交付标准，Docker容器则设计部署与运维，三者缺一不可，合力充当Docker体系的基石
+
+#### DockerFile保留字指令
+
+* FROM 基础镜像，当前编写的镜像给予哪个镜像
+* MAINTAINER 镜像维护者的姓名和邮箱地址
+* RUN 容器构建时需要运行的命令
+* EXPOSE 当前容器对外暴露出的端口号
+* WORKDIR 指定在创建容器后，终端默认登陆进来的工作目录，一个落脚点
+* ENV 用来在构建镜像过程中设置环境变量
+* ADD 将宿主机目录下的文件拷贝进镜像且ADD命令会自动处理URL和解压tar压缩包
+* COPY 类似ADD，拷贝文件和目录到镜像中。将从构建上下文目录中<源路径>的文件/目录复制到新的一层的镜像内的<目标路径>位置
+  * COPY　src dest
+  * COPY ["src", "dest"]
+* VOLUME 容器数据卷，用于数据保存和持久化工作
+* CMD 指定一个容器启动时要运行的命令，DockerFile中可以有多个CMD命令，但只有最后一个生效，CMD会被docker run之后的参数替换
+* ENTRYPOINT 指定一个容器启动时要运行的命令，ENTERPOINT和CMD一样，都是在指定容器启动程序及参数，命令不会覆盖，起追加命令作用
+* ONBUILD 当构建一个被继承的DockerFile运行命令，父镜像在被子继承父镜像的ONBUILD被触发
+
+```
+# 继承centos镜像
+FROM centos
+# 作者信息
+MAINTAINER cliff_ford<473375811@qq.com>
+# 设置环境变量
+ENV mypath /tmp
+# 设置工作目录，即落脚点
+WORKDIR $mypath
+# 安装支持vim ifconfig命令的工具包
+RUN yum -y install vim
+RUN yum -y install net-tools
+# 暴露容器80端口
+EXPOSE 80
+# shell编程
+CMD echo $mypath
+CMD echo "success--------ok"
+# 执行命令
+CMD /bin/bash
+```
 
 
 
