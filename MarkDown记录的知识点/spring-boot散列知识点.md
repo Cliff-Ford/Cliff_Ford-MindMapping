@@ -68,7 +68,7 @@ spring:
 1. 完全排除spring-boot关于数据源的依赖，全部手工配置
 2. 与spring-boot协同配置
    1. 如果你的数据源有主次之分，在你的主数据源上面配置@Primary类型的Bean，之后spring-boot的自动配置都会围绕主数据源进行配置
-   2. 如果你的数据源没有主次之分，你需要排除关于DataSourceAutoConfiguration、DataSourceTransactionManagerAutoConfiguration、JdbcTemplateAutoConfiguration这几个自动配置项，然后分别对你的数据源进行事物管理，jdbc模板的配置
+   2. 如果你的数据源没有主次之分，你需要排除关于DataSourceAutoConfiguration、DataSourceTransactionManagerAutoConfiguration、JdbcTemplateAutoConfiguration这几个自动配置项，然后分别对你的数据源进行事务管理，jdbc模板的配置
 
 下面举一个栗子
 
@@ -266,11 +266,86 @@ JdbcTemplate时spring封装的简化jdbc操作的类，该类提供很多方法
   * Object queryForObject(String sql，RowMapper rowMapper，Object... args) 将args参数绑定到sql语句中，并通过RowMapper返回一个Object类型的单行记录
   * T[] queryForList(String sql，Object[] args，class<T> elementType) 该方法可以返回多行数据的结果，但必须是返回列表，elementType参数返回的是List元素类型
 
+##### 09. 事务传播特性
 
+| 传播性                    | 值   | 描述                                 |
+| ------------------------- | ---- | ------------------------------------ |
+| PROPAGATION_REQUIRED      | 0    | 当前有实物就用当前的，没有就用新的   |
+| PROPAGATION_SUPPORTS      | 1    | 事务可有可无，不是必须的             |
+| PROPAGATION_MANDATORY     | 2    | 当前一定要有事务，不然就抛异常       |
+| PROPAGATION_REQUIRES_NEW  | 3    | 无论是否有事务，都起个新的事务       |
+| PROPAGATION_NOT_SUPPORTED | 4    | 不支持事务，按非事务方式运行         |
+| PROPAGATION_NEVER         | 5    | 不支持事务，如有事务则抛异常         |
+| PROPAGATION_NESTED        | 6    | 当前有事务就在当前事务里再起一个事务 |
 
+##### 10. 事务隔离性
 
+|           隔离性           |  值  | 脏读 | 不可重复读 | 幻读 |
+| :------------------------: | :--: | :--: | :--------: | :--: |
+| ISOLATION_READ_UNCOMMITTED |  1   |  √   |     √      |  √   |
+|  ISOLATION_READ_COMMITTED  |  2   |  ×   |     √      |  √   |
+| ISOLATION_REPEATABLE_READ  |  3   |  ×   |     ×      |  √   |
+|   ISOLATION_SERIALIZABLE   |  4   |  ×   |     ×      |  ×   |
 
+##### 11. 编程式事务
 
+```xml
+# 注入transactionTemplate事务模板
+@Autowired
+private TransactionTemplate transactionTemplate;
+
+@Override
+public void run(String... args) throws Exception {
+	log.info("COUNT BEFORE TRANSACTION: {}", getCount());
+	transactionTemplate.execute(new TransactionCallbackWithoutResult() {
+        @Override
+        protected void doInTransactionWithoutResult(TransactionStatus transactionStatus) 		{
+            jdbcTemplate.execute("INSERT INTO FOO (ID, BAR) VALUES (1, 'aaa')");
+            log.info("COUNT IN TRANSACTION: {}", getCount());
+			# 事务回滚
+            transactionStatus.setRollbackOnly();
+        }
+	});
+	log.info("COUNT AFTER TRANSACTION: {}", getCount());
+}
+```
+
+上面案例中，通过jdbcTemplate.execute(sql)执行插入了一条数据，后面通过transactionStatus.setRollbackOnly()事务回滚
+
+##### 12. 声明式事务
+
+###### 12.1 注解形式的声明式事务
+
+```xml
+	@Override
+    @Transactional
+    public void insertRecord() {
+        jdbcTemplate.execute("INSERT INTO FOO (BAR) VALUES ('AAA')");
+    }
+
+    @Override
+    @Transactional(rollbackFor = RollbackException.class)
+    public void insertThenRollback() throws RollbackException {
+        jdbcTemplate.execute("INSERT INTO FOO (BAR) VALUES ('BBB')");
+        throw new RollbackException();
+    }
+```
+
+上面案例，insertRecord()方法添加了@Transactional注解表示该方法的执行再事务管控内执行
+
+insertThenRollback()方法添加一条数据，主动抛出指定异常用于回滚事务
+
+###### 12.2 xml形式的声明式事务
+
+##### 13. Actuator Endpoint
+
+| URL               | 作用                     |
+| :---------------- | ------------------------ |
+| /actuator/health  | 健康检查                 |
+| /actuator/beans   | 查看容器中的所有Bean     |
+| /actuator/mapping | 查看Web的URL映射         |
+| /actuator/env     | 查看环境信息             |
+| /actuator/info    | 展示了关于应用的一般信息 |
 
 
 

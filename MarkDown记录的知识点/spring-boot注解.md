@@ -212,11 +212,50 @@ static class Hikari{
   }
   ```
 
-  
+##### 13 @Self4j
 
+- 含义：Lombok中的一个注解，将会给目标类注入一个log日志记录对象
 
+- 标注在哪里：class
 
+- 重要注解参数：
 
+- 用例：
+
+  ```java
+  @Self4j
+  public class UserDao{
+      public void insert(){
+          log.trace("insert xxxx");
+          log.info("insert xxxx");
+          log.debug("insert xxxx");
+          log.warn("insert xxxx");
+          log.error("insert xxxx");
+      }
+  }
+  ```
+
+##### 14 @EnableTransactionManagement
+
+- 含义：spring开启事务管理功能
+
+- 标注在哪里：class
+
+- 重要注解参数：mode
+
+- 用例：
+
+  ```java
+  # 事务管理采用代理模式
+  @EnableTransactionManagement(mode = AdviceMode.PROXY)
+  ```
+
+##### 15 @ComponentScan
+
+- 含义：组件扫描
+- 标注在哪里：class
+- 重要注解参数：value
+- 用例：@ComponentScan("packname")扫描指定报名下的组件
 
 
 
