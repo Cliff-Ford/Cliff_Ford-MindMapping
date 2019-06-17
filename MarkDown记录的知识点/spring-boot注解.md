@@ -136,13 +136,83 @@
 
   该案例通过读取bar.datasource前缀下的所有properties属性，然后传递给DataSourceProperties类的无参构造方法，通过该方法构造出数据源需要的必要参数，用于后面的创建数据源对象
 
+##### 09 @ConditionalOnClass，@CoditionalOnMissingBean，@ConditionalOnProperty
 
+- 含义：执行某个方法前的判定条件
 
+- 标注在哪里：method
 
+- 重要注解参数：value/name
 
+- 用例：
 
+  ```java
+  /**
+  * Hikari DataSource configuration
+  */
+  @ConditionalOnClass(HikariDataSource.class)
+  @ConditionalOnMissingBean(DataSource.class)
+  @ConditionalOnProperty(name = "spring.datasource.type", havingValue="com.zaxxer.hikari.HikariDataSource")
+static class Hikari{
+      @Bean
+      @ConfigurationProperties(prefix = "spring.datasource.hikari")
+      public HikariDataSource dataSource(DataSourceProperties properties){
+          HikariDataSource dataSource = createDataSource(properties, HikariDataSource.class);
+          if (StringUtils.hasText(properties.getName())) {
+              dataSource.setPoolName(properties.getName());
+          }
+          return dataSource;
+      }
+  }
+  ```
+  
+  上面案例先通过<font color=red>@ConditionalOnClass(HikariDataSource.class)</font>判断classpath有没有HikariDataSource这个类，存在的时候该类的时候，再通过<font color=red>@ConditionalOnMissingBean(DataSource.class)</font>判断spring容器目前没有DataSource类型的组件，最后还对application.properties文件中的指定k-v对做了校验，这些都验证通过时，才执行static class Hikari{}这一个代码片段，该片段主要通过读取hikari数据源的配置信息，创建hikari数据源并注册到spring容器中
 
+##### 10 @Component，@Repository，@Service
 
+- 含义：表示spring容器的一个组件
+- 标注在哪里：class
+- 重要注解参数：name
+- 用例：@Service("userService") @Repository("userDao")等等
+
+##### 11 @Data
+
+- 含义：Lombok中的一个注解，将会自动生成getter和setter方法
+
+- 标注在哪里：class
+
+- 重要注解参数：
+
+- 用例：
+
+  ```java
+  @Data
+  public class User{
+      private Long id;
+      private String bar;
+  }
+  ```
+
+##### 12 @Builer
+
+- 含义：Lombok中的一个注解，将会给目标类设计一个建造者模式的建造方法
+
+- 标注在哪里：class
+
+- 重要注解参数：
+
+- 用例：
+
+  ```java
+  @Data
+  @Builder
+  public class User{
+      private Long id;
+      private String bar;
+  }
+  ```
+
+  
 
 
 

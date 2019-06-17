@@ -141,15 +141,130 @@ public PlatformTransactionManager barTxManager(DataSource barDataSource) {
 }
 ```
 
+##### 06. HiKariCp连接池
 
+目前最快的连接池，是spring-boot 2.x版本默认的数据库连接池，[官网传送门](<https://github.com/brettwooldridge/HikariCP>)
 
+* 字节码级别优化（很多方法通过JavaAssist生成）
+* 大量小改进
+  * 用FastStatementList代替ArrayList
+  * 无锁集合ConcurrentBag
+  * 代理类的优化（比如，用invokestatic代替了invokevirtual）
 
+```java
+/**
+* Hikari DataSource configuration
+*/
+@ConditionalOnClass(HikariDataSource.class)
+@ConditionalOnMissingBean(DataSource.class)
+@ConditionalOnProperty(name = "spring.datasource.type", havingValue="com.zaxxer.hikari.HikariDataSource")
+static class Hikari{
+    @Bean
+    @ConfigurationProperties(prefix = "spring.datasource.hikari")
+    public HikariDataSource dataSource(DataSourceProperties properties){
+        HikariDataSource dataSource = createDataSource(properties, HikariDataSource.class);
+        if (StringUtils.hasText(properties.getName())) {
+            dataSource.setPoolName(properties.getName());
+        }
+        return dataSource;
+    }
+}
+```
 
+上面案例先通过<font color=red>@ConditionalOnClass(HikariDataSource.class)</font>判断classpath有没有HikariDataSource这个类，存在的时候该类的时候，再通过<font color=red>@ConditionalOnMissingBean(DataSource.class)</font>判断spring容器目前没有DataSource类型的组件，最后还对application.properties文件中的指定k-v对做了校验，这些都验证通过时，才执行static class Hikari{}这一个代码片段，该片段主要通过读取hikari数据源的配置信息，创建hikari数据源并注册到spring容器中
 
+###### HiKariCp常用配置项
 
+```xml
+# maximumPoolSize值代表连接池中允许的最大连接数
+spring.datasource.hikari.maximumPoolSize=10
+# minimumldle值代表连接池中允许的空闲连接数，建议minimumIdle和maximumIdle一致
+spring.datasource.hikari.minimumldle=10
+# idleTimeout表示空闲连接允许存活的时长，600000毫秒，即10分钟
+spring.datasource.hikari.idleTimeout=600000
+# 获取连接超过30秒时认为超时
+spring.datasource.hikari.connectionTimeout=30000
+# maxLifetime用来设置一个connection在连接池中的存活时间，默认30分钟
+spring.datasource.hikari.maxLifetime=1800000
+```
 
+##### 07. Druid数据源
 
+经过阿里巴巴双11摧残的数据源，值得信赖，[使用手册]([https://github.com/alibaba/druid/wiki/%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98](https://github.com/alibaba/druid/wiki/常见问题))
 
+实用的功能
+
+* 详细的监控（非常详细）
+* ExceptionSorter，针对主流的数据库的返回码都有支持
+* SQL防注入
+* 内置加密配置
+* 众多扩展点，方便进行定制
+
+通过spring-boot启动器或者maven下载，注意因为Hikari是spring-boot 2.x版本默认的数据库连接池，所以在引用druid连接池时，需要排除Hikari依赖，如下配置所示
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-jdbc</artifactId>
+    <exclusions>
+        <exclusion>
+            <artifactId>HikariCP</artifactId>
+            <groupId>com.zaxxer</groupId>
+        </exclusion>
+    </exclusions>
+</dependency>
+<dependency>
+    <groupId>com.alibaba</groupId>
+    <artifactId>druid-spring-boot-starter</artifactId>
+    <version>1.1.10</version>
+</dependency>
+```
+
+###### Druid常用配置项
+
+* Filter配置
+
+  ```xml
+  # 全部使用默认值
+  spring.datasource.druid.filters=stat,config,wall,log4j
+  ```
+
+* 密码加密
+
+  ```xml
+  spring.datasource.password=加密密码
+  spring.datasource.druid.filter.config.enabled=true
+  spring.datasource.druid.connection-properties=config.decrypt=true;config.decrypt.key=key
+  ```
+
+* SQL防注入
+
+  ```xml
+  spring.datasource.druid.filter.wall.enabled=true
+  spring.datasource.druid.filter.wall.db-type=h2
+  spring.datasource.druid.filter.wall.config.delete-allow=false
+  spring.datasource.druid.filter.wall.config.drop-table-allow=false
+  ```
+
+##### 08. JdbcTemplate
+
+JdbcTemplate时spring封装的简化jdbc操作的类，该类提供很多方法
+
+* 万能（只能执行一些没有动态传值的语句）
+
+  jdbcTemplate.execute(sql);
+
+* 插入、更新、删除数据的操作
+  * int update(String sql) 该方法是最简单的update方法重载形式，它直接执行传入的sql语句，并返回受影响的行数
+  * int update(PreparedStatementCreator psc) 该方法执行从PreparedStatementCreator返回的语句，并返回受影响的行数
+  * int update(String sql，PreparedStatementSetter pss) 该方法通过PrepareStatementSetter设置sql语句中的参数，并返回受影响的行数
+  * int update(String sql，Object... args) 该方法使用Object... 设置SQL语句中的参数，要求参数不能为null，并返回受影响的行数
+* 查询操作
+  * List query(String sql，RowMapper rowMapper) 执行String类型参数提供的sql语句，并通过RowMapper返回一个List类型的结果
+  * List query(String sql，PreparedStatementSetter pss，RowMapper rowMapper) 根据String类型参数提供的SQL语句创建PreparedStatement对象，通过RowMapper将结果返回到List中
+  * List query(String sql，Object[] args，RowMapper rowMapper) 使用Object[]的值来设置sql语句中的参数值，采用RowMapper回调方法可以直接返回List类型的数据
+  * Object queryForObject(String sql，RowMapper rowMapper，Object... args) 将args参数绑定到sql语句中，并通过RowMapper返回一个Object类型的单行记录
+  * T[] queryForList(String sql，Object[] args，class<T> elementType) 该方法可以返回多行数据的结果，但必须是返回列表，elementType参数返回的是List元素类型
 
 
 
