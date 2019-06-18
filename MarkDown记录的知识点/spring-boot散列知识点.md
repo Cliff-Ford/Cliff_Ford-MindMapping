@@ -347,9 +347,86 @@ insertThenRollback()方法添加一条数据，主动抛出指定异常用于回
 | /actuator/env     | 查看环境信息             |
 | /actuator/info    | 展示了关于应用的一般信息 |
 
+##### 14. ApplicationRunner接口
+
+spring-boot程序入口是SpringApplication.run(Application.class, args);如果你想再运行该方法之前执行一段预定义的程序代码，你可以令Application这个类实现ApplicationRunner接口，然后重写run方法
+
+```java
+@SpringBootApplication
+@EnableJpaRepositories
+@Slf4j
+public class JpaDemoApplication implements ApplicationRunner {
+	
+	public static void main(String[] args) {
+		SpringApplication.run(JpaDemoApplication.class, args);
+	}
+
+	@Override
+	public void run(ApplicationArguments args) throws Exception {
+		initOrders();
+	}
+}
+```
+
+##### 15. JPA中的Repository是如何从Interface变成Bean的?
+
+###### 15.1 JpaRepositoriesRegistrar
+
+* 激活了@EnableJpaRepositories
+* 返回JpaRepositoryConfigExtension
+
+###### 15.2 RepositoryBeanDefinitionRegistrarSupport.registerBeanDefinitions
+
+* 注册Repository Bean（类型是 JpaRepositoryFactoryBean）
+
+###### 15.3 RepositoryConfigurationExtensionSupport.getRepositoryConfigurations
+
+* 取得Repository配置
+
+###### 15.4 JpaRepositoryFactory.getTargetRepository
+
+* 创建Repository
+
+##### 16. MyBatis Generator(MBG)
+
+MBG可以为我们指定的数据库生成pojo类，pojoExample面向对象查询类，mapper接口，mapper接口对应的xml文件。
+
+核心配置文件generatorConfig.xml必须解决下面五个点的问题
+
+* jdbcConnection 如何连接数据库
+* javaModelGenerator 生成的pojo类放在哪里
+* sqlMapGenerator 生成的包含sql语句的xml文件放在哪里
+* javaClientGenerator 生成的mapper接口放在哪里
+* table 为数据库的哪些表自动生成代码
+
+##### 17. PageHelper
+
+PageHelper是国人开发的一个分页功能插件，适用于很多类型的数据库，它的使用非常灵活，有很多种方式，详情可以通过[传送门](<https://github.com/pagehelper/Mybatis-PageHelper/blob/master/wikis/en/HowToUse.md>)查看，重点在第三部分How to use it in your code
+
+我们推荐使用以下几种种方式
+
+```java
+@Mapper
+public interface CoffeeMapper {
+    @Select("select * from t_coffee order by id")
+    List<Coffee> findAllWithRowBounds(RowBounds rowBounds);
+
+    @Select("select * from t_coffee order by id")
+    List<Coffee> findAllWithParam(@Param("pageNum") int pageNum,
+                                  @Param("pageSize") int pageSize);
+}
+```
 
 
 
+```java
+# 第一种方式
+coffeeMapper.findAllWithRowBounds(new RowBounds(1, 3))
+				.forEach(c -> log.info("Page(1) Coffee {}", c));
+# 第二种方式
+coffeeMapper.findAllWithParam(1, 3)
+				.forEach(c -> log.info("Page(1) Coffee {}", c));
+```
 
 
 

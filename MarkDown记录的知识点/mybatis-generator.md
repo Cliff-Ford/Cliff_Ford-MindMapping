@@ -102,11 +102,11 @@ jdbc.password=1234
         </jdbcConnection>
         <!--告诉我生成的pojo类以及pojoExample类放在哪里-->
         <javaModelGenerator targetPackage="com.macro.mall.tiny.mbg.model" targetProject="mall-tiny-01\src\main\java"/>
+        <!--告诉我生成的对应mapper的xml文件放在哪里-->
+        <sqlMapGenerator targetPackage="com.macro.mall.tiny.mbg.mapper" targetProject="mall-tiny-01\src\main\resources"/>  
         <!--告诉我生成的mapper接口放在哪里-->
         <javaClientGenerator type="XMLMAPPER" targetPackage="com.macro.mall.tiny.mbg.mapper"
-                             targetProject="mall-tiny-01\src\main\java"/>
-        <!--告诉我生成的对应mapper的xml文件放在哪里-->
-        <sqlMapGenerator targetPackage="com.macro.mall.tiny.mbg.mapper" targetProject="mall-tiny-01\src\main\resources"/>        
+                             targetProject="mall-tiny-01\src\main\java"/>              
         <!--告诉我针对数据库的哪几张表自动生成代码-->
         <table tableName="user">
             <generatedKey column="id" sqlStatement="MySql" identity="true"/>

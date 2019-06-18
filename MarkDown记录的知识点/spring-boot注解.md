@@ -257,15 +257,140 @@ static class Hikari{
 - 重要注解参数：value
 - 用例：@ComponentScan("packname")扫描指定报名下的组件
 
+##### 16 @Entity，@Table，@Id，@MappedSuperclass，@GeneratedValue，@SequenceGenerator，@CreationTimestamp，@UpdateTimestamp，@Type
 
+- 含义：JPA中的注解，@Entity定义实体类，@Table定义关联的表
 
+- 标注在哪里：class
 
+- 重要注解参数：
 
+- 用例：
 
+  ```java
+  # @Entity注解默认数据库表名与类名相同，如果不相同，需要用@Table关联映射
+  @Entity
+  # @Table将User实体类与数据库表中的user1表关联
+  @Table("user1")
+  public class User{
+      # 标明该字段是表中的主键
+      @Id
+      # 主键生成策略
+      @GenerateValue
+      # 默认类属性与表字段相同，如果不相同，可以通过@Column注解关联
+      @Column("id1")
+      private Long id;
+      
+      @Type(type = "package name", parameters={})
+      private Money price;
+      
+      @Column(updateable = false)
+      @CreationTimestamp
+      private Date createTime;
+      
+      @UpdateTimestamp
+      private Date updateTime;
+  }
+  ```
 
+- 额外说明：@Column注解用updateable说明可不可以更新，@Type用于指定自定义类型
 
+##### 17 @Getter，@Setter，@ToString，@NoArgsConstructor，@RequiredConstructor，@AllArgsConstructor，@CommonsLog，@Log4j2
 
+- 含义：Lombok中的注解，见名思意
+- 标注在哪里：class/filed
+- 重要注解参数：
+- 用例：
+- 额外说明：@Data相当于同时使用@Getter和@Setter和@ToString，@RequiredArgsConstructor为所有 final 和 @NonNull 修饰的字段生成一个构造方法，通常使用@Self4j日志记录
 
+##### 18 @ManyToMany，@JoinTable
+
+- 含义：JPA中的注解，用以说明表之间多对多的关系
+
+- 标注在哪里：filed
+
+- 重要注解参数：name
+
+- 用例：
+
+  ```java
+  public class Order implements Serializable{
+      ...
+      @ManyToMany
+      @JoinTable(name = "T_ORDER_COFFEE")
+      private List<Coffee> items;
+      ...
+  }
+  ```
+
+  上面的订单是通过<font color=red>T_ORDER_COFFEE</font>关联查询到coffee的，多对多关系需要三张表才能描述清楚
+
+##### 19 @EnableTransactionManagement，@Transactional
+
+- 含义：开启事务
+
+- 标注在哪里：class/method
+
+- 重要注解参数：
+
+- 用例：
+
+  ```java
+  # 该注解通常标注再xxxApplication类上面，开启全局的注解形式的事务管理
+  @EnableTransactionManagement
+  public class JpaDemoApplication{
+  	# 该注解通常标注在service类的某个方法上面
+      @Transactional
+      public void insert(){
+  
+      }
+  }
+  ```
+
+##### 20 @EntityScan，@EnableJpaRepository
+
+- 含义：实体扫描，开启Repository类扫描，一般当实体类或者repository接口不在xxxApplication启动类所在的包或者子包时才配置
+- 标注在哪里：class
+- 重要注解参数：
+- 用例：@EntityScan("package name") @EnableJpaRepository("package name")
+
+##### 21 @Mapper，@Insert，@Select，@Delete，@Update，@Results，@Result
+
+- 含义：Mybatis相关的注解
+
+- 标注在哪里：class/method
+
+- 重要注解参数：
+
+- 用例：
+
+  ```java
+  @Mapper
+  public interface CoffeeMapper {
+      @Insert("insert into t_coffee (name, price, create_time, update_time)"
+              + "values (#{name}, #{price}, now(), now())")
+      @Options(useGeneratedKeys = true)
+      int save(Coffee coffee);
+  
+      @Select("select * from t_coffee where id = #{id}")
+      @Results({
+              @Result(id = true, column = "id", property = "id"),
+              @Result(column = "create_time", property = "createTime"),
+              // map-underscore-to-camel-case = true 可以实现一样的效果
+              // @Result(column = "update_time", property = "updateTime"),
+      })
+      Coffee findById(@Param("id") Long id);
+  }
+  ```
+
+- 额外说明：@Mapper通常标注在xxxMapper接口上面，说明该接口将以注解的形式关联sql语句，@Results和@Result一起完成结果映射
+
+##### 22 @MapperScan
+
+- 含义：映射器扫描
+- 标注在哪里：class
+- 重要注解参数：packageName
+- 用例：通常标注在应用入口类，告诉spring去哪里查找mapper@MapperScan("package name")
 
 
 
