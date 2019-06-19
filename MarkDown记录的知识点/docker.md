@@ -1,4 +1,4 @@
-### Docker学习记录
+<center><h3>Docker学习记录</h3></center>
 
 #### 发展背景
 
@@ -398,7 +398,25 @@ CMD echo "success--------ok"
 CMD /bin/bash
 ```
 
+#### docker操作实例
 
+##### docker运行mongo实例
+
+* docker pull mongo（下载）
+* docker images（查看下载是否成功）
+* docker run -d -p 27017:27017 --name mongo -v /home/docker_data/mongo:/data/db -e MONGO_INITDB_ROOT_USERNAME=root -e MONGO_INITDB_ROOT_PASSWORD=1234 mongo（后台运行，端口映射，别名，数据卷映射，账号密码）
+* docker ps（查看是否运行成功）
+* docker exec -it mongo bash（重新进入指定容器）
+* mongo -u root -p 1234（登陆）
+* help（查看帮助命令）
+
+##### docker运行redis实例
+
+* docker pull redis
+* docker images
+* docker run -d -p 6379:6379 --name redis redis
+* docker ps
+* docker exec -it redis redis-cli
 
 
 
