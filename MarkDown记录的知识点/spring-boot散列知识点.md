@@ -428,6 +428,99 @@ coffeeMapper.findAllWithParam(1, 3)
 				.forEach(c -> log.info("Page(1) Coffee {}", c));
 ```
 
+##### 18. redis
+
+spring-boot使用redis非常简单，首先在pom.xml文件中引入依赖
+
+```xml
+# orm框架
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+# redis相关
+<dependency>
+    <groupId>redis.clients</groupId>
+    <artifactId>jedis</artifactId>
+</dependency>
+# 数据库驱动
+<dependency>
+    <groupId>com.h2database</groupId>
+    <artifactId>h2</artifactId>
+    <scope>runtime</scope>
+</dependency>
+
+```
+
+接着在application.properties里面配置redis的连接属性
+
+```properties
+# 这是最简单的配置，如果你没有其他要求
+# redis.host=203.195.177.110
+redis.host=localhost
+
+
+# 补充其他的配置
+#端口号
+redis.port=6379  
+#如果有密码
+redis.password=123456  
+#客户端超时时间单位是毫秒 默认是2000
+redis.timeout=10000
+#最大空闲数
+redis.maxIdle=300  
+#连接池的最大数据库连接数。设为0表示无限制,如果是jedis 2.4以后用redis.maxTotal
+#redis.maxActive=600
+#控制一个pool可分配多少个jedis实例,用来替换上面的redis.maxActive,如果是jedis 2.4以后用该属性
+redis.maxTotal=1000  
+#最大建立连接等待时间。如果超过此时间将接到异常。设为-1表示无限制。
+redis.maxWaitMillis=1000  
+#连接的最小空闲时间 默认1800000毫秒(30分钟)
+redis.minEvictableIdleTimeMillis=300000  
+#每次释放连接的最大数目,默认3
+redis.numTestsPerEvictionRun=1024  
+#逐出扫描的时间间隔(毫秒) 如果为负数,则不运行逐出线程, 默认-1
+redis.timeBetweenEvictionRunsMillis=30000  
+#是否在从池中取出连接前进行检验,如果检验失败,则从池中去除连接并尝试取出另一个
+redis.testOnBorrow=true  
+#在空闲时检查有效性, 默认false
+redis.testWhileIdle=true
+```
+
+然后在你的某个配置类中配置jedisPool作为容器中的一个Bean
+
+```java
+	@Bean
+	@ConfigurationProperties("redis")
+	public JedisPoolConfig jedisPoolConfig() {
+		return new JedisPoolConfig();
+	}
+
+	@Bean(destroyMethod = "close")
+	public JedisPool jedisPool(@Value("${redis.host}") String host) {
+		return new JedisPool(jedisPoolConfig(), host);
+	}
+```
+
+最后，记住jedis连接并不是线程安全的，所以将它放在一个try块里面执行
+
+```java
+try (Jedis jedis = jedisPool.getResource()) {
+    coffeeService.findAllCoffee().forEach(c -> {
+        jedis.hset("springbucks-menu",
+                   c.getName(),
+                   Long.toString(c.getPrice().getAmountMinorLong()));
+    });
+
+    Map<String, String> menu = jedis.hgetAll("springbucks-menu");
+    log.info("Menu: {}", menu);
+
+    String price = jedis.hget("springbucks-menu", "espresso");
+    log.info("espresso - {}",
+             Money.ofMinor(CurrencyUnit.of("CNY"), Long.parseLong(price)));
+}
+```
+
 
 
 
