@@ -392,7 +392,48 @@ static class Hikari{
 - 重要注解参数：packageName
 - 用例：通常标注在应用入口类，告诉spring去哪里查找mapper@MapperScan("package name")
 
+##### 23 @MappedSuperclass
 
+- 含义：这个注解常用在pojo类体系设计上，被该注解标注的类A一般作为pojo的父类，并且A并不会映射到数据库里面，A内的属性与其子类的属性一起映射到数据库表上，该注解不可以与@Entity或者@Table一起使用
+
+- 标注在哪里：class
+
+- 重要注解参数：
+
+- 用例：
+
+  ```java
+  @MappedSuperclass
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public class BaseEntity implements Serializable {
+      @Id
+      @GeneratedValue(strategy = GenerationType.IDENTITY)
+      private Long id;
+      @Column(updatable = false)
+      @CreationTimestamp
+      private Date createTime;
+      @UpdateTimestamp
+      private Date updateTime;
+  }
+  
+  @Entity
+  @Table(name = "T_COFFEE")
+  @Builder
+  @Data
+  @ToString(callSuper = true)
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public class Coffee extends BaseEntity implements Serializable {
+      private String name;
+      @Type(type = "org.jadira.usertype.moneyandcurrency.joda.PersistentMoneyMinorAmount",
+              parameters = {@org.hibernate.annotations.Parameter(name = "currencyCode", value = "CNY")})
+      private Money price;
+  }
+  ```
+
+  
 
 
 
