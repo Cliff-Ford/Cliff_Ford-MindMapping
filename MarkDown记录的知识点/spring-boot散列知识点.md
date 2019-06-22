@@ -979,13 +979,168 @@ reactiveStringRedisTemplate是一个和stringRedisTemplate相类似的简化stri
     * MultipartResolver 文件解析器
   * HandlerMapping 处理映射（url是怎么映射对应控制器的）
 
+##### 27. spring应用程序上下文
 
+spring的应用程序上下文允许有多个，每个应用程序上下文之间还允许有父子关系，但这个父子关系并不等同Java的继承关系
 
+案例：通过aop对不同应用程序上下文中的同名bean做增强处理，看看哪一些有效，哪一些失效
 
+* 首先定义TestBean
 
+  ```java
+  @AllArgsConstructor
+  @Slf4j
+  public class TestBean {
+      private String context;
+  
+      public void hello() {
+          log.info("hello " + context);
+      }
+  }
+  ```
 
+* 定义一个切面，该切面<font color=red>预计</font>会对所有的以testBean开头的bean做后处理增强
 
+  ```java
+  @Aspect
+  @Slf4j
+  public class FooAspect {
+      @AfterReturning("bean(testBean*)")
+      public void printAfter() {
+          log.info("after hello()");
+      }
+  }
+  ```
 
+* 定义注解形式的配置类，该配置类会被<font color=red>注解形式的应用程序上下文</font>识别
+
+  ```java
+  @Configuration
+  @EnableAspectJAutoProxy
+  public class FooConfig {
+      @Bean
+      public TestBean testBeanX() {
+          return new TestBean("foo");
+      }
+  
+      @Bean
+      public TestBean testBeanY() {
+          return new TestBean("foo");
+      }
+  
+      @Bean
+      public FooAspect fooAspect() {
+          return new FooAspect();
+      }
+  }
+  ```
+
+* 注解形式的切面会对testBean做出后处理增强
+
+  ```java
+  ApplicationContext fooContext = new     	AnnotationConfigApplicationContext(FooConfig.class);		
+  
+  TestBean bean = fooContext.getBean("testBeanX", TestBean.class);
+  bean.hello();
+  ```
+
+* 现在定义applicationContext.xml文件,里面只有如下一个bean
+
+  ```xml
+  <bean id="testBeanX" class="geektime.spring.web.context.TestBean">
+      <constructor-arg name="context" value="Bar" />
+  </bean>
+  ```
+
+* xml形式的配置文件会被xml形式的应用程序上下文识别
+
+  ```java
+  ApplicationContext fooContext = new AnnotationConfigApplicationContext(FooConfig.class);
+  
+  		TestBean foo = fooContext.getBean("testBeanX", TestBean.class);
+  		foo.hello();
+  
+  ClassPathXmlApplicationContext barContext = new ClassPathXmlApplicationContext(
+  				new String[] {"applicationContext.xml"});
+  
+  		TestBean bar = barContext.getBean("testBeanX", TestBean.class);
+  		bar.hello();
+  ```
+
+  这里的foo是被增强的
+
+  这里的bar是没有被增强的，因为application.xml文件里面没有配置切面类，也没有开启aop功能
+
+  注意：这里拿到的bar是application.xml里面的testBeanX
+
+* 现在让注解形式的应用程序上下文作为xml形式的应用程序上下文的父上下文
+
+  ```java
+  ApplicationContext fooContext = new AnnotationConfigApplicationContext(FooConfig.class);
+  
+  		TestBean foo = fooContext.getBean("testBeanX", TestBean.class);
+  		foo.hello();
+  
+  		log.info("=============");
+  		ClassPathXmlApplicationContext barContext = new ClassPathXmlApplicationContext(
+  				new String[] {"applicationContext.xml"}, fooContext);
+  
+  		TestBean bar = barContext.getBean("testBeanX", TestBean.class);
+  		bar.hello();
+  		# hello方法会被增强
+  		bar = barContext.getBean("testBeanY", TestBean.class);
+  		bar.hello();
+  ```
+
+  这时再去取testBeanX，会是哪一个应用程序上下文的bean呢？
+
+  和java继承类似的，这里的bean会发生覆盖，所以取到的是xml里面的bean,由于该配置文件里面没有配置切面类，也没有开启aop功能，所以该bean不会被增强
+
+  这时再通过barContext去取testBeanY，能不能取到呢？是可以的，和java继承类似，找不到的bean,递归去父文本中找，一直找不到就抛异常
+
+* 现在给applicationContext.xml文件配置切面类，和开启aop功能
+
+  ```xml
+  	<aop:aspectj-autoproxy/>
+  
+      <bean id="testBeanX" class="geektime.spring.web.context.TestBean">
+          <constructor-arg name="context" value="Bar" />
+      </bean>
+  
+      <bean id="fooAspect" class="geektime.spring.web.foo.FooAspect" />
+  ```
+
+  现在xml里面的testBeanX也具备了后增强功能了
+
+* 想想切面类在注解形式的配置里面已经配过一次了，在xml里面再配置一次，是不是重复了呢？试着将xml里面的切面类去掉，也是可以增强的
+
+  这说明，应用程序在做aop是，切面是允许公用的，但如果你这个this.Context不开启aop功能的话，那你这个bean它也是不能被增强的，你可以试着将xml里面的aop功能关掉，再看看bar是否被增强了
+
+##### 28. spring mvc 的请求处理流程
+
+浏览器请求进来时首先会去到前置处理器Frontcontroller，该处理器根据url传递给指定的controller类，控制器类处理完之后返回Model和视图名给前置处理器，前置处理器拿到model和视图名后调用View Template动态渲染html页面，然后将html传递给前置处理器，前置处理器将拿到的html资源返回个浏览器
+
+##### 29. 复杂的URL设计
+
+```java
+# url参数不能有name
+@GetMapping(path = "/hello", params = "!name")
+    
+    
+# url参数要有name
+@GetMapping(path = "/hello", params = "name")
+    
+    
+# 生产一个MediaType.APPLICATION_JSON_UTF8_VALUE类型数据
+# /{id}表示将url中的斜杠后面的值作为id这个参数的值
+@RequestMapping(path = "/{id}", method = RequestMethod.GET,
+            produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
+    
+# /haha这个请求必须符合consumes定义的数据类型，同时处理后指定了返回码和数据格式
+@PostMapping(path = "/haha", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
+@ResponseStatus(HttpStatus.CREATED)
+```
 
 
 
