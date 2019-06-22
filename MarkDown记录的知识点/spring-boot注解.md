@@ -21,7 +21,7 @@
 - 重要注解参数：value
 - 用例：@RestController("/hello")
 
-##### 03 @RequestMapping
+##### 03 @RequestMapping，@GetMapping, @PostMapping, @PutMapping, @DeleteMapping
 
 - 含义：表示匹配一个url，该注解通常嵌套在@Controller或者@RestController里面使用
 - 标注在哪里：method
@@ -433,7 +433,236 @@ static class Hikari{
   }
   ```
 
+
+##### 24 @EnableCaching，@Cacheable，@CacheEvict，@CachePut，@Caching，@CacheConfig
+
+- 含义：spring缓存抽象中一系列的缓存注解
+
+- 标注在哪里：class/method
+
+- 重要注解参数：
+
+- 额外说明
+
+  * @EnableCaching一般标注在应用入口处，开启全局缓存配置
+  * @Cacheable标注在方法上面，缓存命中直接返回，没有命中的情况下，将执行结果写入缓存中
+  * @CacheEvict清楚缓存
+  * @CachePut直接执行，将执行结果写入缓存中
+  * @Caching可以对上面的@Cacheable、@CacheEvict、@CachePut打包
+  * @CachingCofig可以对缓存做一个设置，比如设置名字
+
+- 用例：
+
+  - spring缓存抽象要用到的注解不需要在pom文件刻意配置，直接用就可以了
+
+  - 在程序入口处开启全局缓存
+
+    ```java
+    @EnableCaching(proxyTargetClass = true)
+    public class SpringBucksApplication implements ApplicationRunner {
+    }
+    ```
+
+  - 在Service类上面配置缓存仓库名，标注一些方法的缓存类型
+
+    ```java
+    @Slf4j
+    @Service
+    @CacheConfig(cacheNames = "coffee")
+    public class CoffeeService {
+        @Autowired
+        private CoffeeRepository coffeeRepository;
+    
+        @Cacheable
+        public List<Coffee> findAllCoffee() {
+            return coffeeRepository.findAll();
+        }
+    
+        @CacheEvict
+        public void reloadCoffee() {
+        }
+    
+        public Optional<Coffee> findOneCoffee(String name) {
+            ExampleMatcher matcher = ExampleMatcher.matching()
+                    .withMatcher("name", exact().ignoreCase());
+            Optional<Coffee> coffee = coffeeRepository.findOne(
+                    Example.of(Coffee.builder().name(name).build(), matcher));
+            log.info("Coffee Found: {}", coffee);
+            return coffee;
+        }
+    }
+    ```
+
+##### 25. @EnableRedisRepositories
+
+- 含义：开启全局redisRepositories支持
+
+- 标注在哪里：class
+
+- 重要注解参数：
+
+- 用例：
+
+  1. 编写redis中的model
+
+  ```java
+  # @RedisHash相当于@Entity,value的值相当于表名，timeToLive是存活时间，一分钟
+  @RedisHash(value = "springbucks-coffee", timeToLive = 60)
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  @Builder
+  public class CoffeeCache {
+      # 一级索引
+      @Id
+      private Long id;
+      # 二级索引
+      @Indexed
+      private String name;
+      private Money price;
+  }
+  ```
+
+  2. 编写redis的jpa接口
+
+  ```java
+  public interface CoffeeCacheRepository extends CrudRepository<CoffeeCache, Long> {
+      Optional<CoffeeCache> findOneByName(String name);
+  }
+  ```
   
+
+##### 26. @EnableAspectJAutoProxy, @Aspect, @Pointcut, @Before, @After, @AfterReturing, @AfterThrowing, @Around, @Order
+
+- 含义：spring aop相关的注解
+- 标注在哪里：class/method
+- 重要注解参数：
+- 用例：HiKari数据库连接池是没有sql监控功能的，现在通过spring aop 对sql的执行进行拦截，利用spy进行sql日志记录
+
+- 通过pom文件引入依赖
+
+  ```xml
+  <dependency>
+      <groupId>p6spy</groupId>
+      <artifactId>p6spy</artifactId>
+      <version>3.8.1</version>
+  </dependency>
+  ```
+
+- 在application.properties文件中对datasource信息做出调整
+
+  ```properties
+  spring.datasource.driver-class-name=com.p6spy.engine.spy.P6SpyDriver
+  spring.datasource.url=jdbc:p6spy:h2:mem:testdb
+  spring.datasource.username=sa
+  spring.datasource.password=
+  ```
+
+- 通过spy.properties文件定义sql记录方式
+
+  ```properties
+  # 单行日志
+  logMessageFormat=com.p6spy.engine.spy.appender.SingleLineFormat
+  # 使用Slf4J记录sql
+  appender=com.p6spy.engine.spy.appender.Slf4JLogger
+  # 是否开启慢SQL记录
+  outagedetection=true
+  # 慢SQL记录标准，单位秒
+  outagedetectioninterval=2
+  ```
+
+- 在应用程序入口处开启切面增强功能
+
+  ```java
+  @EnableAspectJAutoProxy
+  public class SpringBucksApplication implements ApplicationRunner {
+  	
+  }
+  ```
+
+- 编写切面类
+
+  ```java
+  @Aspect
+  @Component
+  @Slf4j
+  public class PerformanceAspect {
+  //    @Around("execution(* geektime.spring.springbucks.repository..*(..))")
+      @Around("repositoryOps()")
+      public Object logPerformance(ProceedingJoinPoint pjp) throws Throwable {
+          long startTime = System.currentTimeMillis();
+          String name = "-";
+          String result = "Y";
+          try {
+              name = pjp.getSignature().toShortString();
+              // pjp.proceed()方法通知目标方法执行
+              return pjp.proceed();
+          } catch (Throwable t) {
+              result = "N";
+              throw t;
+          } finally {
+              long endTime = System.currentTimeMillis();
+              log.info("{};{};{}ms", name, result, endTime - startTime);
+          }
+      }
+  
+      //计算连接点
+      @Pointcut("execution(* geektime.spring.springbucks.repository..*(..))")
+      private void repositoryOps() {
+      }
+  }
+  ```
+
+##### 27. @JsonSerialize，@JsonDeserialize
+
+- 含义：Json序列化相关类
+
+- 标注在哪里：field
+
+- 重要注解参数：using
+
+- 用例：
+
+  ```java
+  public class MoneySerializer extends StdSerializer<Money> {
+      protected MoneySerializer() {
+          super(Money.class);
+      }
+  
+      @Override
+      public void serialize(Money money, JsonGenerator jsonGenerator, SerializerProvider serializerProvider) throws IOException {
+          jsonGenerator.writeNumber(money.getAmountMinorLong());
+      }
+  }
+  
+  
+  public class MoneyDeserializer extends StdDeserializer<Money> {
+      protected MoneyDeserializer() {
+          super(Money.class);
+      }
+  
+      @Override
+      public Money deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JsonProcessingException {
+          return Money.ofMinor(CurrencyUnit.of("CNY"), p.getLongValue());
+      }
+  }
+  ```
+
+##### 28. @RequestBody, @ResponseBody, @ResponseStatus
+
+- 含义：http请求相关的注解
+
+- 标注在哪里：field
+
+- 重要注解参数：using
+
+- 用例：
+
+  @RequestBody标注的形参将接收请求体中的参数，没有@RequestBody标注的形参将接受URL中的参数
+
+  @ResponseBody设置应答报文体内容，@ResponseStatus应答响应码
+
+
 
 
 

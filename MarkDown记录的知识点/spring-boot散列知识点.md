@@ -456,7 +456,7 @@ spring-boot使用redis非常简单，首先在pom.xml文件中引入依赖
 
 ```properties
 # 这是最简单的配置，如果你没有其他要求
-# redis.host=203.195.177.110
+# redis.host=110.110.110.110
 redis.host=localhost
 
 
@@ -521,13 +521,463 @@ try (Jedis jedis = jedisPool.getResource()) {
 }
 ```
 
+##### 19. spring缓存抽象
 
+<font color=red>spring为不同的缓存提供一层抽象</font>
 
+* 为Java方法增加缓存，缓存执行结果
+* 支持ConcurrentMap、EhCache、Caffeine、JCache(JSR-07)
+* 接口
+  * org.springframework.cache.Cache
+  * org.springframework.cache.CacheManager
 
+<font color=red>使用什么类型的缓存</font>
 
+* 一些长久不会变的，或者一天之内不会变的，或者能接受变化存在一定的延时，这些数据应该缓存在界面内部，也称之为本地缓存，同时需要设置一个过期时间
+* 在分布式缓存集群中，需要保持集群内机器访问的一致性时，就需要将数据缓存在中心处，比如用redis控制
+* 一些数据的读写比很低的情况下，不需要使用缓存
 
+<font color=red>@EnableCaching，@Cacheable，@CacheEvict，@CachePut，@Caching，@CacheConfig</font>
 
+- 含义：spring缓存抽象中一系列的缓存注解
+- 标注在哪里：class/method
+- 重要注解参数：
+- 额外说明
+  - @EnableCaching一般标注在应用入口处，开启全局缓存配置
+  - @Cacheable标注在方法上面，缓存命中直接返回，没有命中的情况下，将执行结果写入缓存中
+  - @CacheEvict清楚缓存
+  - @CachePut直接执行，将执行结果写入缓存中
+  - @Caching可以对上面的@Cacheable、@CacheEvict、@CachePut打包
+  - @CachingCofig可以对缓存做一个设置，比如设置名字
+- 用例：
 
+<font color=red>本地缓存用例</font>
+
+* spring缓存抽象要用到的注解不需要在pom文件刻意配置，直接用就可以了
+
+* 在程序入口处开启全局缓存
+
+  ```java
+  @EnableCaching(proxyTargetClass = true)
+  public class SpringBucksApplication implements ApplicationRunner {
+  }
+  ```
+
+* 在Service类上面配置缓存仓库名，标注一些方法的缓存类型
+
+  ```java
+  @Slf4j
+  @Service
+  @CacheConfig(cacheNames = "coffee")
+  public class CoffeeService {
+      @Autowired
+      private CoffeeRepository coffeeRepository;
+  
+      @Cacheable
+      public List<Coffee> findAllCoffee() {
+          return coffeeRepository.findAll();
+      }
+  
+      @CacheEvict
+      public void reloadCoffee() {
+      }
+  
+      public Optional<Coffee> findOneCoffee(String name) {
+          ExampleMatcher matcher = ExampleMatcher.matching()
+                  .withMatcher("name", exact().ignoreCase());
+          Optional<Coffee> coffee = coffeeRepository.findOne(
+                  Example.of(Coffee.builder().name(name).build(), matcher));
+          log.info("Coffee Found: {}", coffee);
+          return coffee;
+      }
+  }
+  ```
+
+<font color=red>redis缓存用例</font>
+
+* pom文件引入cache启动器和redis启动器
+
+  ```xml
+  <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-cache</artifactId>
+  </dependency>
+  <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+  </dependency>
+  ```
+
+* 配置application.properties属性
+
+  ```properties
+  # 配置缓存类型是redis
+  spring.cache.type=redis
+  # 配置缓存仓库名是coffee
+  spring.cache.cache-names=coffee
+  # 配置缓存有效时间为5秒
+  spring.cache.redis.time-to-live=5000
+  # 不缓存空值
+  spring.cache.redis.cache-null-values=false
+  
+  spring.redis.host=localhost
+  ```
+
+##### 20. redisTemplate
+
+redisTemplate和jdbcTemplate相似，是spring简化redis开发写的模板类
+
+案例：利用redisTemplate查询redis中缓存的数据
+
+* pom文件引入依赖
+
+  ```xml
+  <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+  </dependency>
+  ```
+
+* 在业务代码中注入redisTemplate
+
+  ```java
+  @Autowired
+  private RedisTemplate<String, Coffee> redisTemplate;
+  ```
+
+* 查询指定数据
+
+  ```java
+  public Optional<Coffee> findOneCoffee(String name) {
+          HashOperations<String, String, Coffee> hashOperations = redisTemplate.opsForHash();
+      # 缓存是否命中
+          if (redisTemplate.hasKey(CACHE) && hashOperations.hasKey(CACHE, name)) {
+              log.info("Get coffee {} from Redis.", name);
+              # 命中返回
+              return Optional.of(hashOperations.get(CACHE, name));
+          }
+      # 没有命中时，到数据库查询
+          ExampleMatcher matcher = ExampleMatcher.matching()
+                  .withMatcher("name", exact().ignoreCase());
+          Optional<Coffee> coffee = coffeeRepository.findOne(
+                  Example.of(Coffee.builder().name(name).build(), matcher));
+          log.info("Coffee Found: {}", coffee);
+          if (coffee.isPresent()) {
+              log.info("Put coffee {} to Redis.", name);
+              hashOperations.put(CACHE, name, coffee.get());
+              redisTemplate.expire(CACHE, 1, TimeUnit.MINUTES);
+          }
+          return coffee;
+      }
+  ```
+
+##### 21. redisRepository
+
+mysql或者h2都是数据库，spring-boot通过jdbcTemplate或者jpa都可以操作数据库
+
+redis也是数据库，spring-boot通过redisTemplate和jpa也可以操作数据库
+
+但是通过jpa操作redis时略有不同，案例如下
+
+* 通过pom引入关键依赖
+
+  ```xml
+  <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+  </dependency>
+  
+  <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+  </dependency>
+  ```
+
+* 编写model
+
+  ```java
+  # @RedisHash相当于@Entity,value的值相当于表名，timeToLive是存活时间，一分钟
+  @RedisHash(value = "springbucks-coffee", timeToLive = 60)
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  @Builder
+  public class CoffeeCache {
+      # 一级索引
+      @Id
+      private Long id;
+      # 二级索引
+      @Indexed
+      private String name;
+      private Money price;
+  }
+  ```
+
+* 编写repository接口
+
+  ```xml
+  public interface CoffeeCacheRepository extends CrudRepository<CoffeeCache, Long> {
+      Optional<CoffeeCache> findOneByName(String name);
+  }
+  ```
+
+* 在你的业务代码中使用它
+
+  ```java
+  public Optional<Coffee> findSimpleCoffeeFromCache(String name) {
+      Optional<CoffeeCache> cached = cacheRepository.findOneByName(name);
+      if (cached.isPresent()) {
+          CoffeeCache coffeeCache = cached.get();
+          Coffee coffee = Coffee.builder()
+              .name(coffeeCache.getName())
+              .price(coffeeCache.getPrice())
+              .build();
+          log.info("Coffee {} found in cache.", coffeeCache);
+          return Optional.of(coffee);
+      } else {
+          Optional<Coffee> raw = findOneCoffee(name);
+          raw.ifPresent(c -> {
+              CoffeeCache coffeeCache = CoffeeCache.builder()
+                  .id(c.getId())
+                  .name(c.getName())
+                  .price(c.getPrice())
+                  .build();
+              log.info("Save Coffee {} to cache.", coffeeCache);
+              cacheRepository.save(coffeeCache);
+          });
+          return raw;
+      }
+  }
+  ```
+
+##### 22. project reactor
+
+应该看看这篇文章[使用教程](<https://blog.51cto.com/liukang/2090191>)，[原理教程](<http://springcloud.cn/view/366>)
+
+```java
+userService.getFavorites(userId) ➊
+           .flatMap(favoriteService::getDetails)  ➋
+           .switchIfEmpty(suggestionService.getSuggestions())  ➌
+           .take(5)  ➍
+           .publishOn(UiUtils.uiThreadScheduler())  ➎
+           .subscribe(uiList::show, UiUtils::errorPopup);  ➏
+```
+
+➊ 根据用户ID获得喜欢的信息（打开一个 `Publisher`）
+➋ 使用 `flatMap` 操作获得详情信息
+➌ 使用 `switchIfEmpty` 操作，在没有喜欢数据的情况下，采用系统推荐的方式获得
+➍ 取前五个
+➎ 在 `uiThread` 上进行发布
+➏ 最终的消费行为
+
+➊➋➌➍ 的行为就看起来很直观，这个和我们使用 [`Java 8 中的 Streams 编程`](http://www.runoob.com/java/java8-streams.html) 极为相近，但是这里实现和 Strem 是不同的，在后续的分析会展开。
+➎ 和 ➏ 在我们之前的编码（注：传统后台服务）中没有遇见过类似的，这里的行为，我们可以在后续的 [`Reference#schedulers`](http://projectreactor.io/docs/core/release/reference/#schedulers) 中可以得知，`publishOn` 将影响后续的行为操作所在的线程，那我们就明白了，之前的操作会在某个线程中执行，而最后一个 `subscribe()` 函数将在 `uiThread` 中执行。
+
+##### 23. ReactiveStringRedisTemplate
+
+reactiveStringRedisTemplate是一个和stringRedisTemplate相类似的简化string类型操作redis的类，该类的使用需要引入依赖
+
+* pom文件引入依赖
+
+  ```xml
+  <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+  </dependency>
+  ```
+
+* 在你的配置类中注册reactiveStringRedisTemplate
+
+  ```java
+  @Bean
+      ReactiveStringRedisTemplate reactiveRedisTemplate(ReactiveRedisConnectionFactory factory) {
+          return new ReactiveStringRedisTemplate(factory);
+      }
+  ```
+
+* 将查询到的coffee以name作为key，price作为价格put到redis中
+
+  ```java
+  CountDownLatch cdl = new CountDownLatch(1);
+  Flux.fromIterable(list) //list是所有的coffee
+      .publishOn(Schedulers.single()) //后面的操作将发布到一个新的线程上面去处理
+      .doOnComplete(() -> log.info("list ok")) //完成后输出list ok
+      .flatMap(c -> {     // 让流里面的元素经过一层映射成为新的包装好的流
+          log.info("try to put {},{}", c.getName(), c.getPrice());
+          return hashOps.put(KEY, c.getName(), c.getPrice().toString());
+      })
+      .doOnComplete(() -> log.info("set ok"))
+      .concatWith(redisTemplate.expire(KEY, Duration.ofMinutes(1)))//设置缓存有效时间
+      .doOnComplete(() -> log.info("expire ok"))
+      .onErrorResume(e -> {  //错误处理
+          log.error("exception {}", e.getMessage());
+          return Mono.just(false);
+      })  // 订阅，订阅之后才开始工作
+      .subscribe(b -> log.info("Boolean: {}", b), 
+                 e -> log.error("Exception {}", e.getMessage()),
+                 () -> cdl.countDown());
+  ```
+
+##### 24. ReactiveMongoTemplate
+
+和23类似的，reactiveMongoTemplate是一个操作mongo的类，在你安装好mongo之后，你可能需要如下操作
+
+* show dbs(查看目前拥有的数据库)
+
+* use springbucks(使用springbucks库,没有会自动创建)
+
+* mongo每个数据库的用户和密码都可以不一样，所以你需要给这个库建立用户和密码
+
+  ```shell
+  db.createUser({user: "root", pwd: "1234", roles: [{ role: "root", db: "admin" }]})
+  ```
+
+* pom文件引入依赖
+
+  ```xml
+  <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-mongodb-reactive</artifactId>
+  </dependency>
+  ```
+
+* appliaction.properties编写数据库连接
+
+  ```properties
+  # spring.data.mongodb.uri=mongodb://root_name:password@ip:port/database_name
+  spring.data.mongodb.uri=mongodb://root:1234@203.195.177.110:27017/springbucks
+  ```
+
+* 依赖注入reactiveMongoTemplate
+
+  ```java
+  @Autowired
+  private ReactiveMongoTemplate mongoTemplate;
+  ```
+
+* 核心代码将传入的coffee存到mongo中
+
+  ```java
+  private void startFromInsertion(Runnable runnable) {
+  		mongoTemplate.insertAll(initCoffee())
+  				.publishOn(Schedulers.elastic())
+  				.doOnNext(c -> log.info("Next: {}", c))
+  				.doOnComplete(runnable)
+  				.doFinally(s -> {
+  					cdl.countDown();
+  					log.info("Finnally 1, {}", s);
+  				})
+  				.count()
+  				.subscribe(c -> log.info("Insert {} records", c));
+  	}
+  ```
+
+* mongo数据库可以通过如下代码查看
+
+  ```shell
+  db.coffee.find().pretty()
+  ```
+
+##### 25. AOP HiKari SPY
+
+* Spring AOP的核心概念
+
+  |     概念      |                            含义                             |
+  | :-----------: | :---------------------------------------------------------: |
+  |    Aspect     |                            切面                             |
+  |  Join Point   |          连接点，Spring AOP里总是代表一次方法执行           |
+  |    Advice     |                  通知，在连接点执行的动作                   |
+  |   Pointcut    |                 切入点，说明如何匹配连接点                  |
+  | Introduction  |            引入，为现有类型声明额外的方法和属性             |
+  | Target object |                          目标对象                           |
+  |   AOP proxy   | AOP代理对象，可以是JDK动态代理（有接口），也可以是CGLIB代理 |
+  |    Weaving    |        织入，连接切面与目标对象或类型创建代理的过程         |
+
+* HiKari数据库连接池是没有sql监控功能的，现在通过spring aop 对sql的执行进行拦截，利用spy进行sql日志记录
+
+  * 通过pom文件引入依赖
+
+    ```xml
+    <dependency>
+        <groupId>p6spy</groupId>
+        <artifactId>p6spy</artifactId>
+        <version>3.8.1</version>
+    </dependency>
+    ```
+
+  * 在application.properties文件中对datasource信息做出调整
+
+    ```properties
+    spring.datasource.driver-class-name=com.p6spy.engine.spy.P6SpyDriver
+    spring.datasource.url=jdbc:p6spy:h2:mem:testdb
+    spring.datasource.username=sa
+    spring.datasource.password=
+    ```
+
+  * 通过spy.properties文件定义sql记录方式
+
+    ```properties
+    # 单行日志
+    logMessageFormat=com.p6spy.engine.spy.appender.SingleLineFormat
+    # 使用Slf4J记录sql
+    appender=com.p6spy.engine.spy.appender.Slf4JLogger
+    # 是否开启慢SQL记录
+    outagedetection=true
+    # 慢SQL记录标准，单位秒
+    outagedetectioninterval=2
+    ```
+
+  * 在应用程序入口处开启切面增强功能
+
+    ```java
+    @EnableAspectJAutoProxy
+    public class SpringBucksApplication implements ApplicationRunner {
+    	
+    }
+    ```
+
+  * 编写切面类
+
+    ```java
+    @Aspect
+    @Component
+    @Slf4j
+    public class PerformanceAspect {
+    //    @Around("execution(* geektime.spring.springbucks.repository..*(..))")
+        @Around("repositoryOps()")
+        public Object logPerformance(ProceedingJoinPoint pjp) throws Throwable {
+            long startTime = System.currentTimeMillis();
+            String name = "-";
+            String result = "Y";
+            try {
+                name = pjp.getSignature().toShortString();
+                // pjp.proceed()方法通知目标方法执行
+                return pjp.proceed();
+            } catch (Throwable t) {
+                result = "N";
+                throw t;
+            } finally {
+                long endTime = System.currentTimeMillis();
+                log.info("{};{};{}ms", name, result, endTime - startTime);
+            }
+        }
+    
+        //计算连接点
+        @Pointcut("execution(* geektime.spring.springbucks.repository..*(..))")
+        private void repositoryOps() {
+        }
+    }
+    ```
+
+##### 26. Spring MVC
+
+* DispatcherServlet 核心入口
+  * Controller 控制器，每一个url该怎么处理
+  * xxxResolver 各种解析器
+    * ViewResolver 视图解析器
+    * HandlerExceptionResolver 异常解析器
+    * MultipartResolver 文件解析器
+  * HandlerMapping 处理映射（url是怎么映射对应控制器的）
 
 
 
