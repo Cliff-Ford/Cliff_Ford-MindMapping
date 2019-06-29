@@ -544,8 +544,8 @@ try (Jedis jedis = jedisPool.getResource()) {
 - 重要注解参数：
 - 额外说明
   - @EnableCaching一般标注在应用入口处，开启全局缓存配置
-  - @Cacheable标注在方法上面，缓存命中直接返回，没有命中的情况下，将执行结果写入缓存中
-  - @CacheEvict清楚缓存
+  - @Cacheable标注在方法上面，缓存命中直接返回，没有命中的情况下，将执行结果写入缓存中，常和get方法一起用
+  - @CacheEvict清楚缓存，常和delete方法一起用
   - @CachePut直接执行，将执行结果写入缓存中
   - @Caching可以对上面的@Cacheable、@CacheEvict、@CachePut打包
   - @CachingCofig可以对缓存做一个设置，比如设置名字
@@ -1140,6 +1140,66 @@ spring的应用程序上下文允许有多个，每个应用程序上下文之�
 @PostMapping(path = "/haha", consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
 @ResponseStatus(HttpStatus.CREATED)
+```
+
+##### 30. controller层面的数据校验
+
+```java
+// 每一个NewCoffeeRequest对象都会对name和price属性进行条件设定，后面配合@Valid进行验证
+public class NewCoffeeRequest {
+    @NotEmpty
+    private String name;
+    @NotNull
+    private Money price;
+}
+```
+
+```java
+// @Valid会对newCoffee对象进行验证，验证结果放在BindingResult对象里面
+@PostMapping(path = "/", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+@ResponseBody
+@ResponseStatus(HttpStatus.CREATED)
+public Coffee addCoffee(@Valid NewCoffeeRequest newCoffee,
+                        BindingResult result) {
+    if (result.hasErrors()) {
+        // 这里先简单处理一下，后续讲到异常处理时会改
+        log.warn("Binding Errors: {}", result);
+        return null;
+    }
+    return coffeeService.saveCoffee(newCoffee.getName(), newCoffee.getPrice());
+}
+```
+
+##### 31. 文件作为url的一部分
+
+```java
+	@PostMapping(path = "/", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseBody
+    @ResponseStatus(HttpStatus.CREATED)
+    public List<Coffee> batchAddCoffee(@RequestParam("file") MultipartFile file) {
+        List<Coffee> coffees = new ArrayList<>();
+        if (!file.isEmpty()) {
+            BufferedReader reader = null;
+            try {
+                reader = new BufferedReader(
+                        new InputStreamReader(file.getInputStream()));
+                String str;
+                while ((str = reader.readLine()) != null) {
+                    String[] arr = StringUtils.split(str, " ");
+                    if (arr != null && arr.length == 2) {
+                        coffees.add(coffeeService.saveCoffee(arr[0],
+                                Money.of(CurrencyUnit.of("CNY"),
+                                        NumberUtils.createBigDecimal(arr[1]))));
+                    }
+                }
+            } catch (IOException e) {
+                log.error("exception", e);
+            } finally {
+                IOUtils.closeQuietly(reader);
+            }
+        }
+        return coffees;
+    }
 ```
 
 

@@ -662,7 +662,38 @@ static class Hikari{
 
   @ResponseBody设置应答报文体内容，@ResponseStatus应答响应码
 
+##### 29. @NotEmpty, @NotNull, @Valid
 
+- 含义：数据验证相关的注解
+
+- 标注在哪里：field
+
+- 重要注解参数：
+
+- 用例：
+
+  ```java
+  public class NewCoffeeRequest {
+      @NotEmpty
+      private String name;
+      @NotNull
+      private Money price;
+  }
+  ```
+
+  ```java
+  public Coffee addCoffee(@Valid NewCoffeeRequest newCoffee,
+                              BindingResult result) {
+          if (result.hasErrors()) {
+              // 这里先简单处理一下，后续讲到异常处理时会改
+              log.warn("Binding Errors: {}", result);
+              return null;
+          }
+          return coffeeService.saveCoffee(newCoffee.getName(), newCoffee.getPrice());
+      }
+  ```
+
+  
 
 
 
