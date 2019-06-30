@@ -1202,7 +1202,97 @@ public Coffee addCoffee(@Valid NewCoffeeRequest newCoffee,
     }
 ```
 
+##### 32. Spring MVC的异常解析
 
+###### 核心接口
+
+* HandlerExceptionResolver
+
+###### 实现类
+
+* SimpleMappingExceptionResolver
+* DefaultHandlerExceptionResolver
+* ResponseStatusExceptionResolver
+* ExceptionHandlerExceptionResolver
+
+```java
+@RestControllerAdvice
+public class GlobalControllerAdvice {
+    # 处理指定类型的异常
+    @ExceptionHandler(ValidationException.class)
+    # 返回指定异常码
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, String> validationExceptionHandler(ValidationException exception) {
+        Map<String, String> map = new HashMap<>();
+        map.put("message", exception.getMessage());
+        return map;
+    }
+}
+```
+
+##### 33. Spring MVC拦截器
+
+###### 核心接口
+
+* HandlerIntercetor
+  * boolean preHandle() 目标方法执行前进行处理，比如权限检查，如果返回false将终止目标方法执行，返回true将继续执行
+  * void postHandler() 目标方法执行完，视图未渲染之前执行
+  * void afterCompletion() 目标方法执行完，视图渲染之后执行
+
+###### 案例
+
+* 编写自定义的拦截器
+
+  ```java
+  @Slf4j
+  public class PerformanceInterceptor implements HandlerInterceptor {
+      private ThreadLocal<StopWatch> stopWatch = new ThreadLocal<>();
+  
+      @Override
+      public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+          StopWatch sw = new StopWatch();
+          stopWatch.set(sw);
+          sw.start();
+          return true;
+      }
+  
+      @Override
+      public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) throws Exception {
+          stopWatch.get().stop();
+          stopWatch.get().start();
+      }
+  
+      @Override
+      public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
+          StopWatch sw = stopWatch.get();
+          sw.stop();
+          String method = handler.getClass().getSimpleName();
+          if (handler instanceof HandlerMethod) {
+              String beanType = ((HandlerMethod) handler).getBeanType().getName();
+              String methodName = ((HandlerMethod) handler).getMethod().getName();
+              method = beanType + "." + methodName;
+          }
+          log.info("{};{};{};{};{}ms;{}ms;{}ms", request.getRequestURI(), method,
+                  response.getStatus(), ex == null ? "-" : ex.getClass().getSimpleName(),
+                  sw.getTotalTimeMillis(), sw.getTotalTimeMillis() - sw.getLastTaskTimeMillis(),
+                  sw.getLastTaskTimeMillis());
+          stopWatch.remove();
+      }
+  }
+  ```
+
+* 在程序入口类上面实现WebMvcConfigurer接口，该接口是用来自定义webMvc功能的
+
+  ```java
+  //重写addInterceptors方法，并配置需要被拦截的uri
+  @Override
+  public void addInterceptors(InterceptorRegistry registry) {
+      registry.addInterceptor(new PerformanceInterceptor())
+          .addPathPatterns("/coffee/**").addPathPatterns("/order/**");
+  }
+  ```
+
+  
 
 
 

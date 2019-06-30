@@ -693,6 +693,32 @@ static class Hikari{
       }
   ```
 
+
+##### 30. @RestControllerAdvice, @ControllerAdvice
+
+- 含义：控制器增强处理相关的注解
+
+- 标注在哪里：class
+
+- 重要注解参数：
+
+- 用例：
+
+  ```java
+  @RestControllerAdvice
+  public class GlobalControllerAdvice {
+      # 处理指定类型的异常
+      @ExceptionHandler(ValidationException.class)
+      # 返回指定异常码
+      @ResponseStatus(HttpStatus.BAD_REQUEST)
+      public Map<String, String> validationExceptionHandler(ValidationException exception) {
+          Map<String, String> map = new HashMap<>();
+          map.put("message", exception.getMessage());
+          return map;
+      }
+  }
+  ```
+
   
 
 
