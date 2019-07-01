@@ -1292,15 +1292,262 @@ public class GlobalControllerAdvice {
   }
   ```
 
-  
 
+##### 34. restTemplate
 
+* 开发背景：Spring Boot 没有自动配置RestTemplate对象，但可以直接创建或者通过RestTemplateBuilder的build()方法创建
 
+* 作用：通过代码的形式调用远程接口，获取接口返回结果
 
+* 常用方法：getForObject()/getForEntity()/postForObject()/postForEntity()/put()/delete()
 
+* 案例
 
+  1. 通过UriComponentsBuilder来构建URI
 
+     ```java
+     URI uri = UriComponentsBuilder
+     				.fromUriString("http://localhost:8080/coffee/{id}")
+     				.build(1);
+     ```
 
+  2. 通过getForObject方法获取结果
+
+     ```java
+     ResponseEntity<Coffee> c = restTemplate.getForEntity(uri, Coffee.class);
+     		log.info("Response Status: {}, Response Headers: {}", c.getStatusCode(), c.getHeaders().toString());
+     		log.info("Coffee: {}", c.getBody());
+     ```
+
+  3. 完整代码
+
+     ```java
+     @Override
+     	public void run(ApplicationArguments args) throws Exception {
+     		URI uri = UriComponentsBuilder
+     				.fromUriString("http://localhost:8080/coffee/{id}")
+     				.build(1);
+     		ResponseEntity<Coffee> c = restTemplate.getForEntity(uri, Coffee.class);
+     		log.info("Response Status: {}, Response Headers: {}", c.getStatusCode(), c.getHeaders().toString());
+     		log.info("Coffee: {}", c.getBody());
+     
+     		String coffeeUri = "http://localhost:8080/coffee/";
+     		Coffee request = Coffee.builder()
+     				.name("Americano")
+     				.price(BigDecimal.valueOf(25.00))
+     				.build();
+     		Coffee response = restTemplate.postForObject(coffeeUri, request, Coffee.class);
+     		log.info("New Coffee: {}", response);
+     
+     		String s = restTemplate.getForObject(coffeeUri, String.class);
+     		log.info("String: {}", s);
+     	}
+     ```
+
+* 拓展用法：通过RequestEntity对已经构造好的URI进行包装，比如添加请求头信息
+
+  ```java
+  RequestEntity<Void> req = RequestEntity.get(uri)
+  				.accept(MediaType.APPLICATION_XML)//接受xml形式的结果
+  				.build();
+  ```
+
+  通过ResponseEntity对返回结果进行包装，比如将结果包装成泛型的List对象
+
+  ```java
+  //构造泛型包装对象
+  ParameterizedTypeReference<List<Coffee>> ptr =
+  				new ParameterizedTypeReference<List<Coffee>>() {};
+  //包装，coffeeUri是需要访问的接口，HttpMethod.GET是访问方式，null是requestEntity，包装形式ptr
+  		ResponseEntity<List<Coffee>> list = restTemplate
+  				.exchange(coffeeUri, HttpMethod.GET, null, ptr);
+  		list.getBody().forEach(c -> log.info("Coffee: {}", c));
+  ```
+
+##### 35. webClient
+
+webClient和restTemplate类似，都可以通过代码的形式访问接口
+
+```java
+//开启简化的环境
+public static void main(String[] args) {
+		new SpringApplicationBuilder(WebclientDemoApplication.class)
+				.web(WebApplicationType.NONE)//去掉tomcat等容器
+				.bannerMode(Banner.Mode.OFF)//去掉spring banner
+				.run(args);
+	}
+```
+
+通过WebClient.Builder创建webClient对象
+
+```java
+	@Bean
+	public WebClient webClient(WebClient.Builder builder) {
+		return builder.baseUrl("http://localhost:8080").build();
+	}
+```
+
+通过webClient的形式访问资源
+
+```java
+webClient.get()
+				.uri("/coffee/{id}", 1)//访问接口，会结合上面的baseUrl一起用
+				.accept(MediaType.APPLICATION_JSON_UTF8)//接收的数据格式
+				.retrieve()//执行
+				.bodyToMono(Coffee.class)//转换成Mono<Coffee>
+				.doOnError(t -> log.error("Error: ", t))//错误时执行
+				.doFinally(s -> cdl.countDown())//最后完成时执行
+				.subscribeOn(Schedulers.single())//声明将在一个新的线程里面执行
+				.subscribe(c -> log.info("Coffee 1: {}", c));//执行内容
+```
+
+完整案例
+
+```java
+@Override
+	public void run(ApplicationArguments args) throws Exception {
+		CountDownLatch cdl = new CountDownLatch(2);
+
+		webClient.get()
+				.uri("/coffee/{id}", 1)
+				.accept(MediaType.APPLICATION_JSON_UTF8)
+				.retrieve()
+				.bodyToMono(Coffee.class)
+				.doOnError(t -> log.error("Error: ", t))
+				.doFinally(s -> cdl.countDown())
+				.subscribeOn(Schedulers.single())
+				.subscribe(c -> log.info("Coffee 1: {}", c));
+
+		Mono<Coffee> americano = Mono.just(
+				Coffee.builder()
+						.name("americano")
+						.price(Money.of(CurrencyUnit.of("CNY"), 25.00))
+						.build()
+		);
+		webClient.post()
+				.uri("/coffee/")
+				.body(americano, Coffee.class)
+				.retrieve()
+				.bodyToMono(Coffee.class)
+				.doFinally(s -> cdl.countDown())
+				.subscribeOn(Schedulers.single())
+				.subscribe(c -> log.info("Coffee Created: {}", c));
+
+		cdl.await();
+
+		webClient.get()
+				.uri("/coffee/")
+				.retrieve()
+				.bodyToFlux(Coffee.class)
+				.toStream()
+				.forEach(c -> log.info("Coffee in List: {}", c));
+	}
+```
+
+##### 36. HTTP方法
+
+| 动作    | 安全/幂等 | 用途                                                       |
+| ------- | --------- | ---------------------------------------------------------- |
+| GET     | Y/Y       | 信息获取                                                   |
+| POST    | N/N       | 该方法用途广泛，可用于创建，更新或一次性对多个资源进行修改 |
+| DELETE  | N/Y       | 删除资源                                                   |
+| PUT     | N/Y       | 更新或完全替换一个资源                                     |
+| HEAD    | Y/Y       | 获取与GET一样的HTTP头信息，但是没有响应体                  |
+| OPTIONS | Y/Y       | 获取资源支持的HTTP方法列表                                 |
+| TRACE   | Y/Y       | 让服务器返回其收到的HTTP头                                 |
+
+##### 37. HTTP返回码
+
+| 状态码 | 描述             |
+| ------ | ---------------- |
+| 2开头  | 成功             |
+| 3开头  | 重定向，缓存相关 |
+| 4开头  | 客户端错误       |
+| 5开头  | 服务端错误       |
+
+##### 38. Jackson辅助库
+
+```xml
+<!-- 增加Jackson的 Hibernate5 类型支持 -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.datatype</groupId>
+			<artifactId>jackson-datatype-hibernate5</artifactId>
+			<version>2.9.8</version>
+		</dependency>
+```
+
+```xml
+<!-- 增加Jackson XML支持 -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.dataformat</groupId>
+			<artifactId>jackson-dataformat-xml</artifactId>
+			<version>2.9.0</version>
+		</dependency>
+```
+
+##### 39. spring-boot-starter-data-rest
+
+这个启动器可以通过注解的形式自动给你的responsitory构建restful风格的资源访问url
+
+1. 通过pom文件引入依赖
+
+   ```xml
+   <dependency>
+       <groupId>org.springframework.boot</groupId>
+       <artifactId>spring-boot-starter-data-rest</artifactId>
+   </dependency>
+   ```
+
+2. 给目标repository添加注解
+
+   ```java
+   @RepositoryRestResource(path = "/coffee")
+   public interface CoffeeRepository extends JpaRepository<Coffee, Long> {
+       List<Coffee> findByNameInOrderById(List<String> list);
+       Coffee findByName(String name);
+   }
+   ```
+
+   这样，通过http://localhost:8080/coffee就可以访问全部的coffee资源了，后面接其他参数有不同的响应
+
+3. 通过访问http://localhost:8080/coffee可以得到如下信息
+
+   * 分了页的coffee对象信息
+   * 通过http://localhost:8080/coffee/search可以查看如何查找coffee的方法
+   * 通过http://localhost:8080/coffee?page=0&size=2&sort=id,desc等信息可以定制分页排序的功能
+
+4. 现在我们通过代码的形式调用接口，获取数据
+
+   1. 构造要访问的连接
+
+      ```java
+      Link coffeeLink = getLink(ROOT_URI,"coffees");
+      readCoffeeMenu(coffeeLink);
+      ```
+
+   2. 通过方法访问
+
+      ```java
+      private Link getLink(URI uri, String rel) {
+              ResponseEntity<Resources<Link>> rootResp =
+                      restTemplate.exchange(uri, HttpMethod.GET, null,
+                              new ParameterizedTypeReference<Resources<Link>>() {});
+              Link link = rootResp.getBody().getLink(rel);
+              log.info("Link: {}", link);
+              return link;
+          }
+      
+      
+      private void readCoffeeMenu(Link coffeeLink) {
+              ResponseEntity<PagedResources<Resource<Coffee>>> coffeeResp =
+                      restTemplate.exchange(coffeeLink.getTemplate().expand(),
+                              HttpMethod.GET, null,
+                              new ParameterizedTypeReference<PagedResources<Resource<Coffee>>>() {});
+              log.info("Menu Response: {}", coffeeResp.getBody());
+          }
+      ```
+
+      
 
 
 
