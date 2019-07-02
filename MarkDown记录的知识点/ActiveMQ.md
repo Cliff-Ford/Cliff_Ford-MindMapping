@@ -331,7 +331,172 @@ connection.createSession(false/true, Session.AUTO_ACKNOWLEDGE);
 * 在事务性会话中，当一个事务被成功提交则消息被自动签收
 * 非事务性会话中，消息何时被确认取决于创建会话时的应答模式（Session.AUTO_ACKNOWLEDGE|SESSION_CLIENT_ACKNOWLEDGE)等
 
+##### Spring整合ActiveMQ
 
+###### pom.xml文件整合依赖
+
+```xml
+<dependencies>
+    <!-- Spring对JMS的支持 -->
+    <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-jms</artifactId>
+        <version>4.0.0.RELEASE</version>
+    </dependency>
+    <!-- 添加ActiveMQ的pool包 -->
+    <dependency>
+        <groupId>org.apache.activemq</groupId>
+        <artifactId>activemq-pool</artifactId>
+        <version>5.9.0</version>
+    </dependency>
+</dependencies>
+```
+
+###### applicationContext.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/context
+            http://www.springframework.org/schema/context/spring-context.xsd
+            http://www.springframework.org/schema/beans
+            http://www.springframework.org/schema/beans/spring-beans.xsd
+            http://www.springframework.org/schema/aop
+            http://www.springframework.org/schema/aop/spring-aop.xsd">
+    <!--  开启包的自动扫描  -->
+    <context:component-scan base-package="com.atguigu.activemq"/>
+    <!--    配置连接工厂池，之后会自动创建一个session放在jmsTemplate里面-->
+    <bean id="jmsFactory" class="org.apache.activemq.pool.PooledConnectionFactory" destroy-method="stop">
+        <!--连接工厂-->
+        <property name="connectionFactory">
+            <bean class="org.apache.activemq.ActiveMQConnectionFactory">
+                <!--目标地址-->
+                <property name="brokerURL" value="tcp://203.195.177.110:61616"/>
+            </bean>
+        </property>
+    </bean>
+
+    <!--创建队列-->
+    <bean id="destinationQueue" class="org.apache.activemq.command.ActiveMQQueue">
+        <constructor-arg index="0" value="spring-active-queue"/>
+    </bean>
+
+    <!--创建主题-->
+    <bean id="destinationTopic" class="org.apache.activemq.command.ActiveMQTopic">
+        <constructor-arg index="0" value="spring-active-topic"/>
+    </bean>
+
+    <!--    spring提供的JMS工具类，它可以进行消息发送，接收等-->
+    <bean id="jmsTemplate" class="org.springframework.jms.core.JmsTemplate">
+        <property name="connectionFactory" ref="jmsFactory"/>
+        <!--该ref指向谁，jmsTemplate就针对哪个目的地操作 -->
+        <property name="defaultDestination" ref="destinationTopic"/>
+        <property name="messageConverter">
+            <bean class="org.springframework.jms.support.converter.SimpleMessageConverter"/>
+        </property>
+    </bean>
+</beans>
+```
+
+###### 编写生产者生产消息
+
+```java
+@Service
+public class SpringMQ_Produce {
+    @Autowired
+    private JmsTemplate jmsTemplate;
+
+    public static void main(String[] args) {
+        ApplicationContext ctx = new ClassPathXmlApplicationContext("applicationContext.xml");
+        SpringMQ_Produce produce = (SpringMQ_Produce) ctx.getBean("springMQ_Produce");
+        //通过传入MessageCreator匿名内部类来生产消息
+        produce.jmsTemplate.send(new MessageCreator() {
+            public Message createMessage(Session session) throws JMSException {
+                return session.createTextMessage("spring activemq message 3333");
+            }
+        });
+    }
+}
+```
+
+###### 编写消费者消费消息
+
+```java
+@Service
+public class SpringMQ_Consumer {
+
+    @Autowired
+    private JmsTemplate jmsTemplate;
+
+    public static void main(String[] args) {
+        ApplicationContext ctx = new ClassPathXmlApplicationContext("applicationContext.xml");
+        SpringMQ_Consumer consumer = (SpringMQ_Consumer) ctx.getBean("springMQ_Consumer");
+        //接收并转型
+        String text = (String)consumer.jmsTemplate.receiveAndConvert();
+        System.out.println(text);
+    }
+}
+```
+
+###### 设置消息监听者，生产者生产的消息将会被自动消费
+
+1. 编写监听类
+
+   ```java
+   public class MyMessageListener implements MessageListener {
+       public void onMessage(Message message) {
+           if(message != null && message instanceof TextMessage){
+               TextMessage textMessage = (TextMessage)message;
+               try {
+                   System.out.println(textMessage.getText());
+               } catch (JMSException e) {
+                   e.printStackTrace();
+               }
+           }
+       }
+   }
+   ```
+
+2. 将监听类注册到bean容器中
+
+   ```xml
+   <bean id="myMessageListener" class="com.atguigu.activemq.support.MyMessageListener"/>
+   ```
+
+3. 开启自动监听容器
+
+   ```xml
+   <bean id="jmsContainer" class="org.springframework.jms.listener.DefaultMessageListenerContainer">
+           <property name="connectionFactory" ref="jmsFactory"/>
+           <property name="destination" ref="destinationTopic"/>
+           <property name="messageListener" ref="myMessageListener"/>
+       </bean>
+   ```
+
+4. 编写生产者生产消息，此时消息会被自动消费
+
+   ```java
+   @Service
+   public class SpringMQ_Produce {
+       @Autowired
+       private JmsTemplate jmsTemplate;
+   
+       public static void main(String[] args) {
+           ApplicationContext ctx = new ClassPathXmlApplicationContext("applicationContext.xml");
+           SpringMQ_Produce produce = (SpringMQ_Produce) ctx.getBean("springMQ_Produce");
+           produce.jmsTemplate.send(new MessageCreator() {
+               public Message createMessage(Session session) throws JMSException {
+                   return session.createTextMessage("spring activemq message 3333");
+               }
+           });
+       }
+   }
+   ```
+
+   
 
 
 
