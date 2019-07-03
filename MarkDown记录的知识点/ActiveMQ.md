@@ -252,9 +252,9 @@ public class JmsConsumer2 {
   System.out.println(textMessage.getJMSPriority());//9
   ```
 
-##### JMS可靠性
+##### JMS可靠性消息
 
-###### JMS的持久性（PERSISTENT）
+###### JMS的持久（PERSISTENT）
 
 消息头可以设置消息的持久化模式，队列的消息默认是持久化的
 
@@ -496,25 +496,272 @@ public class SpringMQ_Consumer {
    }
    ```
 
+
+##### SpringBoot整合ActiveMQ
+
+###### pom.xml文件整合依赖
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-activemq</artifactId>
+</dependency>
+```
+
+###### 配置application.yml文件
+
+```yml
+spring:
+  activemq:
+    broker-url: tcp://203.195.177.110:61616 # MQ地址
+    user: admin # 用户名
+    password: admin # 密码
+  jms:
+    pub-sub-domain: true    # false = Queue true = Topic 注意测试队列时改成false,同时注意将主题相关的生产者和消费者组件从容器中排除（通过注释@Conmponent的方法）
+
+# 自定义了对列名
+myqueue: spring-boot-activemq-queue
+# 自定义了主题名
+mytopic: spring-boot-activemq-topic
+```
+
+###### 编写配置类，配置一个队列和一个主题
+
+```java
+@Component
+public class ConfigBean {
+    //将application.yml里面的myqueue属性值注入该field
+    @Value("${myqueue}")
+    private String myQueue;
+
+    @Value("${mytopic}")
+    private String myTopic;
+
+    //创建队列
+    @Bean
+    public Queue queue(){
+        return new ActiveMQQueue(myQueue);
+    }
+
+    //创建主题
+    @Bean
+    public Topic topic(){
+        return new ActiveMQTopic(myTopic);
+    }
+}
+
+```
+
+###### 编写队列生产者和主题生产者
+
+```java
+@Component
+@EnableJms
+public class Queue_Produce {
+    @Autowired
+    private JmsMessagingTemplate jmsMessagingTemplate;
+
+    @Autowired
+    private Queue queue;
+
+    public void produceMsg(){
+        jmsMessagingTemplate.convertAndSend(queue, UUID.randomUUID().toString());
+    }
+
+    //间隔三秒定投
+    @Scheduled(fixedDelay = 3000)
+    public void produceMsgScheduled(){
+        jmsMessagingTemplate.convertAndSend(queue, "Scheduled : "+UUID.randomUUID().toString());
+
+    }
+}
+```
+
+```java
+@Component
+@EnableJms
+public class Topic_Produce {
+    @Autowired
+    private JmsMessagingTemplate jmsMessagingTemplate;
+
+    @Autowired
+    private Topic topic;
+
+    @Scheduled(fixedDelay = 3000)
+    public void produceMsg(){
+        jmsMessagingTemplate.convertAndSend(topic, UUID.randomUUID().toString());
+    }
+
+}
+```
+
+###### 编写队列消费者和主题消费者
+
+```java
+//@Component
+public class Queue_Consumer {
+
+    @JmsListener(destination = "${myqueue}")
+    public void receive(TextMessage textMessage){
+        System.out.println(textMessage);
+    }
+}
+```
+
+```java
+@Component
+public class Topic_Consumer {
+
+    @JmsListener(destination = "${mytopic}")
+    public void receive(TextMessage textMessage){
+        System.out.println(textMessage);
+    }
+}
+```
+
+###### 测试
+
+```java
+@SpringBootApplication
+//注意需要开启定时开关，定时任务才可以执行
+@EnableScheduling
+public class DemoApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(DemoApplication.class, args);
+	}
+
+}
+```
+
+##### ActiveMQ传输协议
+
+ActiveMQ支持的client-broker通讯协议有<font color=red>TCP</font>、<font color=red>NIO</font>、UDP、SSL、HTTP(S)、VM
+
+如果你要更改传输协议，需要到安装目录下的conf/activemq.xml中的<font color=red>transportConnectors</font>标签中改
+
+TCP传输的优点
+
+* TCP协议传输可靠性高，稳定性强
+* 高效性：字节流方式传递，效率很高
+* 有效性、可用性：应用广泛，支持任何平台
+
+NIO的应用场景和优点
+
+* 可能有大量的client去连接到Broker上，一般情况下，大量的Client去连接Broker是被操作系统的线程所限制的，因此 ，NIO的实现比TCP需要更少的线程去运行，所以建议使用NIO协议
+* 可能对于Broker有一个很迟钝的网络传输，NIO比TCP提供更好的性能
+
+| 协议    | 描述                                                         |
+| ------- | ------------------------------------------------------------ |
+| TCP     | 默认，性能相对可以                                           |
+| NIO     | 基于TCP协议之上的，进行了扩展和优化，具有更好的扩展性        |
+| UDP     | 性能比TCP更好，但是不具备可靠性                              |
+| SSL     | 安全连接                                                     |
+| HTTP(S) | 基于HTTP或者HTTPS                                            |
+| VM      | VM本身不是协议，当客户端和代理在同一个Java虚拟机（VM）中运行时，他们之间需要通信，但不想占用网络通道，而是直接通信，可以使用该方式 |
+
+##### 如何将ActiveMQ默认的tcp协议更改为NIO协议？
+
+如果你要更改传输协议，需要到安装目录下的conf/activemq.xml中的<font color=red>transportConnectors</font>标签中改
+
+添加以下一句话
+
+```xml
+<transportConnector name="nio" uri="nio://0.0.0.0:61618?trace=true" />
+```
+
+<font color=red>tcp协议下的代码转换为nio协议时，代码基本不需要变动，只需要说明协议类型和端口，但如果改为其他协议，代码会有不同程度的变化</font>
+
+如何让nio支持更多的协议呢？试一下auto+nio://0.0.0.0:61608?xxxxx
+
+##### ActiveMQ消息的存储与持久化
+
+KahaDB是目前默认的存储方式，消息存储使用一个事务日志和仅仅用一个索引文件来存储它所有的地址
+
+KahaDB只有四类文件和一个lock
+
+* db-number.log日志记录文件
+* db.data该文件包含了持久化的BTree索引，索引了消息数据记录中的消息，他是消息的索引文件，本质上是B-Tree(B树)，使用B-Tree作为索引指向db-number.log里面存储的消息
+* db.free当前db.data文件里哪些页面是空闲的，文件具体内容是所有空闲页的ID
+* db.redo用来进行消息回复，如果KahaDB消息存储在强制退出后启动，用于恢复BTree索引
+* lock文件锁，表示当前获得KahaDB读写权限的broker
+
+##### 利用JDBC实现消息的持久化
+
+1. 将JDBC驱动jar包和数据连接池jar包（默认放了dbcp2连接池）放进ActiveMQ安装目录下的lib文件中
+
+2. 打开ActiveMQ安装目录下conf/activemq.xml配置文件，做出如下修改
+
+   ```hxml
+   <!--
+       <persistenceAdapter>
+           <kahaDB directory="${activemq.data}/kahadb"/>
+       </persistenceAdapter>
+   -->
    
+   <persistenceAdapter>
+   	<jdbcPersistenceAdapter dataSource="#mysql-ds" createTablesOnStartup="true"/>
+   </persistenceAdapter>
+   ```
 
+3. 在activemq.xml配置文件broker结束标签后面，import标签之前添加#mysql-ds的bean
 
+   ```xml
+   <bean id="mysql-ds" class="org.apache.commons.dbcp2.BasicDataSource" destroy-method="close"> 
+       <property name="driverClassName" value="com.mysql.jdbc.Driver"/> 
+       <property name="url" value="jdbc:mysql://localhost/activemq?relaxAutoCommit=true"/> 
+       <property name="username" value="activemq"/> 
+       <property name="password" value="activemq"/> 
+       <property name="poolPreparedStatements" value="true"/> 
+     </bean> 
+   ```
 
+4. 在数据库目标主机建立数据库
 
+   ```sql
+   create database activemq;
+   ```
 
+5. 重启activemq服务，目标数据库将自动创建三张表
 
+   * ACTIVEMQ_MSGS（存储消息）
+     * ID：自增数据库主键
+     * CONTAINER：消息的Destination
+     * MSGID_PROD：消息发送者的主键
+     * MSG_SEQ：发送消息的顺序，MSGID_PROD+MSG_SEQ可以组成JMS的MessageID
+     * EXPIRATION：消息的过期时间，存储的是从1970-1-1到现在的毫秒数
+     * MSG：消息本体的Java序列化对象的二进制数据
+     * PRIORITY：优先级，0-9
+   * ACTIVEMQ_ACKS（存储订阅关系）
+     * CONTAINER：消息的Destination
+     * SUB_DEST：如果使用Static集群，这个字段会有集群其他系统的消息
+     * ClIENT_ID：每个订阅者必须有一个唯一的客户端ID
+     * SUB_NAME：订阅者名
+     * SELECTOR：选择器，可以选择只消费满足条件的消息。条件可以自定义属性实现，可支持多属性AND和OR操作
+     * LAST_ACKED_ID：记录消费过的消息的ID
+   * ACTIVEMQ_LOCK（记录拥有读写权限的broker，用于集群的场景）
+     * ID
+     * BROKER_NAME
 
+6. 代码验证，注意设置消息为持久模式，然后观察生产消息后数据库表的变化，消费消息后数据库的变化
 
+##### 增强JDBC实现消息的持久化
 
+这是一个告诉缓冲层，挡在数据库前面，一段时间后尚未被消费的消息才会进入数据库
 
+```xml
+<persistenceFactory>
+	<journalPersistenceAdapterFactory>
+		....
+	</journalPersistenceAdapterFactory>
+</persistenceFactory>
+```
 
+##### ActiveMQ的高可用（集群）
 
-
-
-
-
-
-
+* 基于sharedFileSystem共享文件系统（KahaDB默认）
+* 基于JDBC
+* 基于可复制的LevelDB
 
 
 

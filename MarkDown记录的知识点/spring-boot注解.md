@@ -719,6 +719,49 @@ static class Hikari{
   }
   ```
 
+
+##### 31. @Schedule，@EnableScheduling
+
+- 含义：定时任务相关注解
+
+- 标注在哪里：method/class
+
+- 重要注解参数：fixedDelay
+
+- 用例：
+
+  ```java
+  //注意在程序入口类上面开启定时任务开关@EnableScheduling
+  //间隔三秒定投
+      @Scheduled(fixedDelay = 3000)
+      public void produceMsgScheduled(){
+          jmsMessagingTemplate.convertAndSend(queue, "Scheduled : "+UUID.randomUUID().toString());
+  
+      }
+  ```
+
+##### 32. @JmsListener，@EnableJms
+
+- 含义：JMS消费者相关注解
+
+- 标注在哪里：method/class
+
+- 重要注解参数：destination
+
+- 用例：
+
+  ```java
+  //注意在程序入口类开启JMS开关@EnableJms
+  @Component
+  public class Queue_Consumer {
+  
+      @JmsListener(destination = "${myqueue}")
+      public void receive(TextMessage textMessage){
+          System.out.println(textMessage);
+      }
+  }
+  ```
+
   
 
 
