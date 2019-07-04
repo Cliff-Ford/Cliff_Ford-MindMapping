@@ -78,7 +78,7 @@ SpringBoot可以独立使用，SpringCloud依赖于SpringBoot
 | 消息队列                                 | Kafka、ActiveMQ               |
 | 服务配置中心管理                         | SpringCloudConfig、Chef       |
 
-###### erueka和zookeeper都可以提供服务注册与发现的功能，有什么区别吗？
+###### Eureka和Zookeeper都可以提供服务注册与发现的功能，有什么区别吗？
 
 ###### Dubbo和Spring Cloud有什么区别
 
@@ -94,6 +94,32 @@ SpringBoot可以独立使用，SpringCloud依赖于SpringBoot
 | 消息总线     | 无            | Spring Cloud Bus             |
 | 数据流       | 无            | Spring Cloud Stream          |
 | 批量任务     | 无            | Spring Cloud Task            |
+
+##### Eureka知识点
+
+###### Eureka是什么？
+
+Eureka是Netflix的一个子模块，也是核心模块之一。Eureka是一个基于REST的服务，用于定位服务，以实现云端中间层服务发现和故障迁移。服务注册与发现对于微服务架构来说非常重要，有了服务注册和发现，只需要使用服务的标识符，就可以访问到服务，而不需要修改服务调用的配置文件，功能类似于dubbo的注册中心，比如Zookeeper
+
+###### Eureka架构
+
+Eureka采用了C-S的设计架构。
+
+Eureka Server作为服务注册功能的服务器，他是服务注册中心，各个节点启动后，会在Eureka Server进行注册，如果某个Client在90秒内（3次心跳）均没有响应，将被移出注册中心
+
+Eureka Client是一个Java客户端，用于简化Eureka Server的交互，系统中的其他微服务通过Client连接到Eureka Server并维持心跳连接（默认30秒一次）。
+
+这样系统的维护人员就可以通过Eureka Server来监控系统中各个微服务是否正常运行。SpringCloud的一些其他模块（比如Zuul）就可以通过Eureka Server来发现系统中的其他微服务，并执行相关的逻辑
+
+![Eureka架构图](D:\02_个人文档\照片\20[00_10_04][20190704-161605].png)
+
+###### Eureka自我保护机制
+
+默认情况下，如果Eureka Server在一定时间内没有接收到某个微服务的心跳，Eureka Server将会注销该实例（默认90秒）。但是当网络分区故障发生时，微服务于Eureka Server之间无法正常通信，以上行为就变得非常危险——因为微服务本身还是健康的，此时不应该注销微服务。Eureka通过自我保护模式来解决这个问题，当Eureka Server节点在短时间内丢失过多的客户端（可能发生了网络故障），一旦进入该模式，Eureka Server就会保护服务注册表中的信息，不再删除服务注册表中的数据，也即是不注销任何微服务。当网络故障恢复后，该Eureka Server节点将自动退出保护模式
+
+一句话概括：某个时刻某个微服务不可用了，eureka不会立刻清理，依旧会对该微服务的信息进行保存
+
+可通过eureka.server.enable-self-preservation = false来禁用自我保护模式
 
 <center><h3>分布式项目演示案例</h3></center>
 
@@ -220,9 +246,512 @@ public class Dept implements Serializable {
 
 选择microservicecloud-api模块，右键run maven -> clean成功之后，run maven -> install，其他模块通过坐标引入即可使用该模块编写的类了
 
+##### 6. 创建microservicecloud-provider-dept-8001模块
+
+该模块用于提供部门的服务，注意该模块仍然继承于父模块microservicecloud
+
+###### 编写pom文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>microservicecloud</artifactId>
+        <groupId>cliff.ford</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>microservicecloud-provider-dept-8001</artifactId>
+
+    <dependencies>
+        <dependency>
+            <groupId>cliff.ford</groupId>
+            <artifactId>microservicecloud-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>druid</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter</artifactId>
+            <version>2.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jetty</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>springloaded</artifactId>
+            <version>RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+###### 编写application.yml文件
+
+```yml
+server:
+  port: 8001
+
+mybatis:
+  config-location: classpath:mybatis/mybatis.cfg.xml  # mybatis配置文件所在路径
+  type-aliases-package: entity                        # 所有Entity别名类所在包
+  # 这里之前少写了一个s,找bug找了很久
+  mapper-locations: classpath:mybatis/mapper/**/*.xml  # mapper映射文件
+
+spring:
+  application:
+    name: microservicecloud-dept
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource      # 当前数据源操作类型
+    driver-class-name: org.gjt.mm.mysql.Driver        # mysql驱动包
+    url: jdbc:mysql://localhost:3306/cloudDB01        # 数据库url
+    username: root
+    password: 1234
+    dbcp2:
+      min-idle: 5                                     # 数据库连接池的最小维持数
+      initial-size: 5                                 # 初始化连接数
+      max-total: 5                                    # 最大连接数
+      max-wait-millis: 200                            # 最大等待毫秒数
+```
+
+###### 编写sql脚本
+
+```sql
+create database cloudDB01 character set utf8;
+
+create table dept(
+    deptno bigint not null primary key auto_increment,
+    dname varchar(60),
+    db_source varchar(60)
+);
+
+insert into dept(dname, db_source) value('开发部', DATABASE()),('人事部', DATABASE()),('财务部', DATABASE()),('市场部', DATABASE()),('运维部', DATABASE());
+```
+
+###### 依次编写dao、service、controller的信息
+
+```java
+@Mapper
+public interface DeptDao {
+    boolean addDept(Dept dept);
+    Dept findById(Long id);
+    List<Dept> findAll();
+}
+
+public interface DeptService {
+    boolean add(Dept dept);
+    Dept get(Long id);
+    List<Dept> list();
+}
+
+@Service
+public class DeptServiceImpl implements DeptService {
+
+    @Autowired
+    private DeptDao deptDao;
+
+    @Override
+    public boolean add(Dept dept) {
+        return deptDao.addDept(dept);
+    }
+
+    @Override
+    public Dept get(Long id) {
+        return deptDao.findById(id);
+    }
+
+    @Override
+    public List<Dept> list() {
+        System.out.println(deptDao);
+        return deptDao.findAll();
+    }
+}
 
 
+@RestController
+public class DeptController {
 
+    @Autowired
+    private DeptService deptService;
+
+    @RequestMapping(value = "/dept/add", method = RequestMethod.POST)
+    public boolean add(@RequestBody Dept dept){
+        return deptService.add(dept);
+    }
+
+
+    @GetMapping(value = "/dept/get/{id}")
+    public Dept get(@PathVariable("id") Long id){
+        return deptService.get(id);
+    }
+
+    @GetMapping(value = "/dept/list")
+    public List<Dept> list(){
+        return deptService.list();
+    }
+}
+```
+
+###### 根据之前yml文件的配置，创建相应文件夹及编写对应mapper.xml文件
+
+```xml
+<mapper namespace="cliff.ford.dao.DeptDao">
+    <select id="findById" resultType="dept" parameterType="long">
+        select * from dept where deptno = #{deptno}
+    </select>
+
+    <insert id="addDept" parameterType="dept">
+        insert into dept(dname, db_source) values(#{dname}, DATABASE())
+    </insert>
+
+    <select id="findAll" resultType="dept">
+        select * from dept
+    </select>
+
+</mapper>
+```
+
+###### 编写启动类并启动测试
+
+```java
+@SpringBootApplication
+public class DeptProvider8001_App {
+    public static void main(String[] args) {
+        SpringApplication.run(DeptProvider8001_App.class, args);
+    }
+}
+```
+
+##### 7. 创建microservicecloud-consumer-dept-80模块
+
+该模块用于消费microservicecloud-privider-dept-8001提供的服务，这么做是为了隐藏真正的服务接口，注意该模块还是继承于父模块
+
+###### pom文件编写
+
+```xml
+<parent>
+        <artifactId>microservicecloud</artifactId>
+        <groupId>cliff.ford</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>microservicecloud-consumer-dept-80</artifactId>
+    <description>部门微服务消费者</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>cliff.ford</groupId>
+            <artifactId>microservicecloud-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>springloaded</artifactId>
+            <version>1.2.8.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+        </dependency>
+    </dependencies>
+```
+
+###### 编写application.properties文件
+
+```properties
+server.port=80
+```
+
+###### 编写配置类
+
+```java
+//RestTemplate是REST风格服务的客户端调用工具类
+@Configuration
+public class ConfigBean {
+    @Bean
+    public RestTemplate getRestTemplate(){
+        return new RestTemplate();
+    }
+}
+```
+
+###### 编写客户端调用代码
+
+按照以前的开发经验，controller去调用service，service去调用dao，但这种模式是服务端的开发思维，客户端则是在controller里面通过restTemplate对象直接访问获取资源
+
+```java
+@RestController
+public class DeptController_Consumer {
+
+    private static final String REST_URL_PREFIX = "http://localhost:8001";
+
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @RequestMapping(value = "/consumer/dept/add")
+    public boolean add(Dept dept){
+        return restTemplate.postForObject(REST_URL_PREFIX+"/dept/add", dept, Boolean.class);
+    }
+
+    @RequestMapping(value = "/consumer/dept/get/{id}")
+    public Dept get(@PathVariable("id") Long id){
+        return restTemplate.getForObject(REST_URL_PREFIX+"/dept/get/"+id, Dept.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    @RequestMapping(value = "/consumer/dept/list")
+    public List<Dept> list(){
+        return restTemplate.getForObject(REST_URL_PREFIX+"/dept/list", List.class);
+    }
+
+}
+```
+
+###### 程序启动类
+
+```java
+@SpringBootApplication
+public class DeptConsumer80_App {
+    public static void main(String[] args) {
+        SpringApplication.run(DeptConsumer80_App.class, args);
+    }
+}
+```
+
+##### 8. 创建microservicecloud-eureka-7001模块
+
+注意该模块仍然继承于父模块
+
+###### 编写pom文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>microservicecloud</artifactId>
+        <groupId>cliff.ford</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>microservicecloud-eureka-7001</artifactId>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+            <version>2.1.1.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>springloaded</artifactId>
+            <version>1.2.8.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>
+```
+
+###### 编写application.yml文件
+
+```yml
+server:
+  port: 7001
+
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    register-with-eureka: false       # false 表示不向注册中心注册自己
+    fetch-registry: false             # false 表示自己就是注册中心，我的职责是维护服务实例，并不需要去检索服务
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/   # 设置与Eureka Server交互的地址查询服务和注册服务都需要依赖该地址,注意最后面有个/
+```
+
+###### 编写启动类
+
+```java
+@SpringBootApplication
+@EnableEurekaServer
+public class EurekaServer7001_App {
+    public static void main(String[] args) {
+        SpringApplication.run(EurekaServer7001_App.class, args);
+    }
+}
+```
+
+###### 访问测试
+
+http://localhost:70001
+
+##### 9. 改造父模块microservicecloud
+
+###### 改造pom文件
+
+```xml
+# 添加如下标签
+<build>
+    <finalName>microservicecloud</finalName>
+    <resources>
+        <resource>
+            <directory>src/main/resource</directory>
+            <filtering>true</filtering>
+        </resource>
+    </resources>
+    <plugins>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-resources-plugin</artifactId>
+            <configuration>
+                <delimiters>
+                    <delimit>$</delimit>
+                </delimiters>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
+```
+
+##### 10. 改造microservicecloud-provider-dept-8001模块
+
+###### 改造pom.xml文件
+
+```xml
+# cloud配置
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-config</artifactId>
+    <version>2.1.1.RELEASE</version>
+</dependency>
+# eureka client
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    <version>2.1.1.RELEASE</version>
+</dependency>
+
+# 添加actuator用于项目监控
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+```
+
+###### 改造application.yml文件
+
+```yml
+eureka:
+  client:  # eureka client注册进eureka服务列表内
+    service-url:
+      defaultZone: http://localhost:7001/eureka
+  instance:
+    instance-id: microservicecloud-dept8001   # 给自己在eureka注册中心起别名
+    prefer-ip-address: true                   # 显示完整ip
+
+
+info:
+  app.name: cliffford-microservicecloud
+  company.name: cliff.ford
+  build.artifactId: $project.artfactId$
+  build.version: $project.version$
+```
+
+###### 改造启动类
+
+```java
+# 添加注解
+@EnableEurekaClient
+```
+
+此时再次启动eureka和provider，访问http://localhost:7001，将鼠标停留在Application右侧的超链接上面，可以有如下优化
+
+![优化效果1](D:\02_个人文档\照片\微信截图_20190704215907.png)
+
+点击超链接，将跳转到新页面
+
+![优化效果2](D:\02_个人文档\照片\微信截图_20190704215633.png)
+
+##### 11. 给microservicecloud-provider-dept-8001添加服务发现功能
+
+###### 修改DeptController
+
+```java
+//添加代码
+@Autowired
+private DiscoveryClient discoveryClient;
+
+@GetMapping(value = "/dept/discovery")
+    public Object discovery(){
+        List<String> list = discoveryClient.getServices();
+        System.out.println(list);
+
+        List<ServiceInstance> instances = discoveryClient.getInstances("MICROSERVICECLOUD-DEPT");
+        for(ServiceInstance instance : instances){
+            System.out.println(instance.getServiceId()+"\t"+
+                    instance.getHost()+"\t"+
+                    instance.getPort()+"\t"+
+                    instance.getUri());
+        }
+        return this.discoveryClient;
+    }
+```
+
+同时给启动类添加@EnableDiscoveryClient注解
+
+##### 12. 给microservicecloud-consumer-dept-80添加服务发现功能
+
+###### 修改DeptController_Consumer
+
+```java
+//添加代码
+@GetMapping(value = "/consumer/dept/discovery")
+    public Object discovery(){
+        return restTemplate.getForObject(REST_URL_PREFIX+"/dept/discovery", Object.class);
+    }
+```
 
 
 
