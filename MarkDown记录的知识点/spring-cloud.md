@@ -829,9 +829,100 @@ eureka:
 
 修改完之后，启动eureka集群和启动部门微服务服务端，分别打开localhost1:7001、localhost2:7002、localhost3:7003查看微服务信息
 
+##### 14. 修改microservicecloud-consumer-dept-80模块，整合Ribbon
 
+###### 修改pom文件
 
+```xml
+# 添加依赖
+<!--Ribbon-->
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.cloud</groupId>-->
+<!--            <artifactId>spring-cloud-netflix-eureka-client</artifactId>-->
+<!--            <version>2.1.1.RELEASE</version>-->
+<!--        </dependency>-->
+# 注意这个和上面那个的区别，是不一样的，改了一天的bug
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+            <version>2.1.1.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-ribbon</artifactId>
+            <version>2.1.1.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-config</artifactId>
+            <version>2.1.1.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+```
 
+###### 将之前的application.properties改为application.yml文件
+
+```yml
+server:
+  port: 80
+
+eureka:
+  client:
+    register-with-eureka: false
+    service-url:
+      defaultZone: http://localhost1:7001/eureka,http://localhost2:7002/eureka,http://localhost3:7003/eureka
+
+```
+
+###### 修改配置类
+
+```java
+@Configuration
+public class ConfigBean {
+    @Bean
+    @LoadBalanced  // Ribbon 让restTemplate对象有了负载均衡的功能，注意是客户端
+    public RestTemplate getRestTemplate(){
+        return new RestTemplate();
+    }
+}
+```
+
+###### 修改对外访问控制器
+
+```java
+@RestController
+public class DeptController_Consumer {
+
+//    private static final String REST_URL_PREFIX = "http://localhost:8001";
+    // 通过服务名屏蔽了ip和端口
+    private static final String REST_URL_PREFIX = "http://MICROSERVICECLOUD-DEPT";
+    ...
+}
+```
+
+###### 修改程序入口类
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+public class DeptConsumer80_App {
+    public static void main(String[] args) {
+        SpringApplication.run(DeptConsumer80_App.class, args);
+    }
+}
+```
+
+###### 测试及效果描述
+
+1. 启动7001 7002 7003 模块
+2. 启动8001模块
+3. 启动80模块
+4. localhost1:7001 localhost2:7002 localhost3:7003 正常，说明eureka集群配置完成
+5. localhost:8001/dept/list通过，说明8001正常对外提供服务
+6. localhost/consumer/dept/list通过，说明80可供客户端正常使用
 
 
 
