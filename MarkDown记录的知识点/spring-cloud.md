@@ -78,7 +78,20 @@ SpringBoot可以独立使用，SpringCloud依赖于SpringBoot
 | 消息队列                                 | Kafka、ActiveMQ               |
 | 服务配置中心管理                         | SpringCloudConfig、Chef       |
 
+###### ACID和CAP是什么？
+
+传统的ACID，A(Atomiclty 原子性)，C(Consistency 一致性)，I(Isolation 独立性)，D(Durability 持久性)
+
+CAP，C(Consistency 强一致性)，A(Availability 可用性)，P(Partition tolerance 分区容错性)
+
 ###### Eureka和Zookeeper都可以提供服务注册与发现的功能，有什么区别吗？
+
+Zookeeper保证CP（强一致性和分区容错性）：当向注册中心查询服务列表时，我们可以容忍注册中心返回的时几分钟以前的注册信息，但不能接收服务直接down掉不可用。也就是说，服务注册功能对可用性的要求高于一致性，但是zk会出现这样的一种情况，当master节点因为网络故障于其他节点时区联系时，剩余节点会重新进行leader选举。问题在于，选举leader的时间太长，30-120秒，且选举期间整个zk集群时不可用的，这就导致了在选举期间服务注册功能瘫痪。在云部署的环境下，因网络问题使得zk集群失去master节点时较大概率的事情，虽然服务最终能够恢复，但是漫长的选举时间导致的注册长期不可用时不能容忍的
+
+Eureka保证AP（可用性和分区容错性）：Eureka各个节点都是平等的，几个节点挂掉不会影响正常节点的工作，剩余的节点依然可以提供注册和发现服务。而Eureka 客户端在向某个Eureka Server注册或者如果发现连接失败，则会自动切换至其他节点，只要有一台Eureka Server还在，就能保证注册服务的可用性（保证可用性），只不过查到的信息可能不是最新的（不保证强一致性）。除此之外，Eureka还有一种自我保护机制，如果15分钟内超过85%的节点都没有正常的心跳，那么Eureka就认为客户端与注册中心出现了网络故障，此时会出现以下几种情况：
+
+1. Eureka不再从注册列表中一处因为长时间没收到心跳而应该过期的服务
+2. Eureka仍然能够接收新服务的注册和查询请求，但是不会被同步到其他节点上（即保证当前节点依然可用）
 
 ###### Dubbo和Spring Cloud有什么区别
 
@@ -94,6 +107,8 @@ SpringBoot可以独立使用，SpringCloud依赖于SpringBoot
 | 消息总线     | 无            | Spring Cloud Bus             |
 | 数据流       | 无            | Spring Cloud Stream          |
 | 批量任务     | 无            | Spring Cloud Task            |
+
+
 
 ##### Eureka知识点
 
@@ -120,6 +135,14 @@ Eureka Client是一个Java客户端，用于简化Eureka Server的交互，系�
 一句话概括：某个时刻某个微服务不可用了，eureka不会立刻清理，依旧会对该微服务的信息进行保存
 
 可通过eureka.server.enable-self-preservation = false来禁用自我保护模式
+
+##### Ribbon知识点
+
+###### Ribbon是什么？
+
+Spring Cloud Ribbon是基于Netflix Ribbon实现的一套<font color=red>客户端</font>   <font color=purple>负载均衡</font>工具，主要功能是提供客户端的软件负载均衡算法，将Netflix的中间层服务连接在一起。Ribbon客户端组件提供一系列完善的配置项如连接超时，重试等。简单的说，就是在配置文件中列出Load Balancer(简称LB)后面所有的机器，Ribbon会自动的帮助你基于某种规则（如简单轮询，随机连接等）去连接这些机器，我们也可以自定义负载均衡算法。
+
+Ribbon负载均衡算法属于进程内LB算法，将选择权交给客户端，案例：小明去KFC点餐，有两个队列，小明经过判断决定去人少的那一队排队。
 
 <center><h3>分布式项目演示案例</h3></center>
 
@@ -753,9 +776,58 @@ private DiscoveryClient discoveryClient;
     }
 ```
 
+##### 13. 配置Eureka集群环境
 
+###### 修改host文件
 
+修改C:\Windows\System32\drivers\etc\host文件，添加如下代码，让浏览器识别更多的localhost
 
+```txt
+	127.0.0.1       localhost1
+	127.0.0.1       localhost2
+	127.0.0.1       localhost3
+```
+
+###### 新建microservicecloud-eureka-7002和microservicecloud-eureka-7003模块
+
+这两个模块均继承于父模块，pom文件和7001模块一样，程序入口类和7001模块一样
+
+###### 修改application.yml文件
+
+以7003为例，7001和7002同理
+
+```yml
+server:
+  port: 7003|7002|7001
+
+eureka:
+  instance:
+    hostname: localhost3|localhost2|localhost1
+  client:
+    register-with-eureka: false       # false 表示不向注册中心注册自己
+    fetch-registry: false             # false 表示自己就是注册中心，我的职责是维护服务实例，并不需要去检索服务
+    service-url:
+      # defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/   # 设置与Eureka Server交互的地址查询服务和注册服务都需要依赖该地址
+      # 7003要告诉自己7001和7002的信息，另外两个同理
+      defaultZone: http://localhost1:7001/eureka/,http://localhost2:7002/eureka/
+```
+
+###### 修改microservicecloud-provider-dept-8001模块的application.yml文件
+
+上面配置了eureka的集群环境，但是服务提供者尚未注册到eureka集群中
+
+```yml
+eureka:
+  client:  # eureka client注册进eureka服务列表内
+    service-url:
+      defaultZone: http://localhost1:7001/eureka,http://localhost2:7002/eureka,http://localhost3:7003/eureka
+  instance:
+    instance-id: microservicecloud-dept8001   # 给自己在eureka注册中心起别名
+    prefer-ip-address: true                   # 显示完整ip
+
+```
+
+修改完之后，启动eureka集群和启动部门微服务服务端，分别打开localhost1:7001、localhost2:7002、localhost3:7003查看微服务信息
 
 
 
