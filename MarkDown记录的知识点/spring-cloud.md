@@ -144,6 +144,73 @@ Spring Cloud Ribbon是基于Netflix Ribbon实现的一套<font color=red>客户�
 
 Ribbon负载均衡算法属于进程内LB算法，将选择权交给客户端，案例：小明去KFC点餐，有两个队列，小明经过判断决定去人少的那一队排队。
 
+###### Ribbon有哪些负载均衡算法
+
+| RoundRobinRule            | 轮询                                                         |
+| ------------------------- | ------------------------------------------------------------ |
+| RandomRule                | 随机                                                         |
+| AvailabilityFilteringRule | 会先过滤掉由于多次访问故障而处于断路器跳闸状态的服务，还有并发的连接数量超过阈值的服务，然后对剩余的服务列表按照轮询策略进行访问 |
+| WeightedResponseTimeRule  | 根据平均响应时间计算所有服务的权重，响应时间越快服务权重越大越容易被选中，刚启动时如果统计信息不足，则使用RoundRobinRule策略，等统计信息足够了会自动切换为WeightedResponseTimeRule |
+| RetryRule                 | 先按照RoundRobinRule策略获取服务，如果获取服务失败则在指定时间内进行重试，获取可用的服务 |
+| BestAvailableRule         | 会先过滤掉由于多次访问故障处于断路器跳闸的服务，然后选择一个并发量最小的服务 |
+| ZoneAvoidanceRule         | 默认规则，复合判断server所在区域的性能和server的可用性选择服务 |
+
+
+
+###### 如何自定义负载均衡算法？
+
+Ribbon的负载均衡算法，均继承于AbstractLoadBalancerRule抽象类，该抽象类实现了IRule, IClientConfigAware接口，简单来说，你可以编写一个类继承于AbstractLoadBalancerRule抽象类，然后重写部分方法实现自己的负载均衡算法，再利用配置类显示配置，同时在主启动类上面添加如下注解信息
+
+@RibbonClient(name="service-name",  configuration=MyRobbinRule.class)，并且MyRobbinRule类不能放在@ComponentScan所能扫描的包及其子包下，而@SpringBoootApplication是一个混合注解（含有@ComponentScan），所以你不能将MyRobbinRule放在程序入口类所在的包及其子包，你需要在程序入口类的最上层包建立一个同级包，放在这个同级包里面
+
+```java
+@Configuration
+public class MyRobbinRule{
+    @Bean
+    public IRule myRandomRule(){
+        return new MyRandomRule();
+    }
+}
+```
+
+当然，Ribbon提供的7种负载均衡算法已经够用了
+
+##### Feign知识点
+
+###### Feign是什么？
+
+Feign是一个声明式的Web服务客户端，使得编写Web服务客户端变得非常容易，只需要创建一个接口，然后再上面添加注解即可使用
+
+Feign集成了Ribbon,利用Ribbon维护了Microservicecloud-dept的服务列表，并且通过轮询实现了客户端的负载均衡，而与Ribbon不同的是，通过feign只需要定义服务绑定接口且以声明式的方法，优雅而简单的实现了服务调用
+
+##### Hystrix知识点
+
+###### Hystix是什么？
+
+Hystrix是一个用于处理分布式系统的延迟和容错的开源库，在分布式系统里，许多依赖不可避免的会调用失败，比如超时，异常等，Hystrix能够保证在一个依赖出问题的情况下，不会导致整体服务失败，便面级联故障，以提供分布式系统的弹性
+
+”断路器“本身是一种开关装置，当某个服务单元发生故障之后，通过断路器的故障监控（类似熔断保险丝），向调用方返回一个符合预期的，可处理的备选响应（FallBack），而不是长时间的等待或者抛出调用方无法处理的异常，这样就保证了服务调用方的线程不会被长时间，不必要地占用，从而避免了故障在分布式系统种的蔓延，乃至雪崩
+
+###### 服务雪崩
+
+多个微服务之间调用的时候，假设微服务A调用微服务B和微服务C，微服务B和微服务C又调用其他的微服务，这就是所谓的”扇出“。如果扇出链路上某个微服务的调用响应时间过长或者不可用，对微服务A的调用就会占用越来越多的系统资源，进而引起系统崩溃，所谓”雪崩效应“。
+
+对于高流量的应用来说，单一的后端依赖可能会导致所有服务器上的所有资源都在几秒钟内饱和，比失败更糟糕的是，这些应用程序还可能导致服务之间的延迟增加，备份队列，线程和其他系统的资源紧张，导致整个系统发生发生更多的级联故障，这些都表示需要对故障和延迟进行隔离和管理，以便单个依赖关系的失败，能不能取消整个应用程序或系统
+
+###### 服务熔断
+
+熔断机制是应对服务雪崩的一种微服务链路保护机制
+
+当扇出链路的某个微服务不可用或者响应时间太长时，会进行服务的降级，进而熔断该节点微服务的调用，快速返回”错误“的响应信息。当检测到该节点微服务调用i昂应正常后恢复调用链路。
+
+在SpringCloud框架里熔断机制通过Hystrix实现，Hystrix会见你控微服务间调用的状况，当失败的调用到达一定阈值，缺省时5秒内20次调用失败就会启动熔断机制。
+
+熔断机制的注解时@HystrixCommand
+
+
+
+
+
 <center><h3>分布式项目演示案例</h3></center>
 
 ##### 1. 创建一个空的Project
@@ -924,21 +991,332 @@ public class DeptConsumer80_App {
 5. localhost:8001/dept/list通过，说明8001正常对外提供服务
 6. localhost/consumer/dept/list通过，说明80可供客户端正常使用
 
+##### 15. 创建microservicecloud-provider-dept-8002和microservicecloud-provider-dept-8003搭建服务集群
+
+注意这两个模块都继承于父模块，pom文件相同，程序入口类名更改一下
+
+###### 修改applcation.yml文件
+
+```yml
+# 端口号需要改
+server:
+  port: 8002
+
+# 对外的服务名字不能改，Ribbon是根据服务名负载均衡的，Eureka也是根据服务名划分服务的
+spring:
+  application:
+    name: microservicecloud-dept
+  # 数据库连接改成2号库
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource      # 当前数据源操作类型
+    driver-class-name: org.gjt.mm.mysql.Driver        # mysql驱动包
+    url: jdbc:mysql://localhost:3306/cloudDB02        # 数据库url
+    username: root
+    password: 1234
+    
+eureka:
+  client:  # eureka client注册进eureka服务列表内
+    service-url:
+      defaultZone: http://localhost1:7001/eureka,http://localhost2:7002/eureka,http://localhost3:7003/eureka
+  instance:
+  	# instance-id也需要改
+    instance-id: microservicecloud-dept8002   # 给自己在eureka注册中心起别名
+    prefer-ip-address: true                   # 显示完整ip
+```
+
+###### 测试
+
+1. 启动7001 7002 7003
+2. 启动8001 8002
+3. 启动80
+4. 测试localhost1:7001 localhost2:7002 localhost3:7003
+5. 测试localhost:8001/dept/list localhost:8002/dept/list
+6. 测试localhost/consumer/dept/list
+7. 测试的目的是为了证明Ribbon的负载均衡生不生效
+8. 如果你的内存不足，你可以只启动一个7001，也可以验证
+
+##### 16. 创建microservicecloud-consumer-dept-feign-80模块
+
+该模块继承于父模块，用于演示Feign功能
+
+###### 修改microservicecloud-api模块
+
+1. 修改pom文件
+
+   ```xml
+   <dependency>
+       <groupId>org.springframework.cloud</groupId>
+       <artifactId>spring-cloud-starter-feign</artifactId>
+       <version>RELEASE</version>
+   </dependency>
+   ```
+
+2. 添加service包，添加DeptClientService类
+
+   ```java
+   @FeignClient(value = "MICROSERVICECLOUD-DEPT")
+   public interface DeptClientService {
+       @RequestMapping(value = "/dept/add", method = RequestMethod.POST)
+       boolean add(@RequestBody Dept dept);
+   
+   
+       @GetMapping(value = "/dept/get/{id}")
+       Dept get(@PathVariable("id") Long id);
+   
+       @GetMapping(value = "/dept/list")
+       List<Dept> list();
+   
+   }
+   ```
+
+3. 重新maven clean maven install该api模块
+
+###### 编写microservicecloud-consumer-dept-feign-80模块pom文件
+
+```xml
+<dependencies>
+        <dependency>
+            <groupId>cliff.ford</groupId>
+            <artifactId>microservicecloud-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>springloaded</artifactId>
+            <version>1.2.8.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+            <version>2.1.1.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-ribbon</artifactId>
+            <version>2.1.1.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-config</artifactId>
+            <version>2.1.1.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-feign</artifactId>
+            <version>RELEASE</version>
+        </dependency>
+    </dependencies>
+```
+
+###### 编写microservicecloud-consumer-dept-feign-80模块application.yml文件
+
+```yml
+server:
+  port: 80
+
+eureka:
+  client:
+    register-with-eureka: false
+    service-url:
+      defaultZone: http://localhost1:7001/eureka,http://localhost2:7002/eureka,http://localhost3:7003/eureka
+
+```
+
+###### 编写microservicecloud-consumer-dept-feign-80模块控制器
+
+```java
+//该类路径是cliff.ford.controller.DeptController_Consumer
+@RestController
+public class DeptController_Consumer {
 
 
+    @Autowired
+    private DeptClientService service;
 
+    @RequestMapping(value = "/consumer/dept/add")
+    public boolean add(Dept dept){
+        return service.add(dept);
+    }
 
+    @RequestMapping(value = "/consumer/dept/get/{id}")
+    public Dept get(@PathVariable("id") Long id){
+        return service.get(id);
+    }
 
+    @RequestMapping(value = "/consumer/dept/list")
+    public List<Dept> list(){
+        System.out.println("方法进来了");
+        return service.list();
+    }
+}
+```
 
+###### 编写启动类
 
+```java
+//该类路径是cliff.ford.DeptConsumer_Feign_App
+@SpringBootApplication
+@EnableEurekaClient
+//这里的service是api模块里面的包
+@EnableFeignClients(basePackages = {"service"})
+//之前因为没有写cliff.ford，导致它去另一个模块扫描service包之后，本模块下面的controller包没有生效，连接访问一直404
+@ComponentScan(basePackages = {"service", "cliff.ford"})
+public class DeptConsumer_Feign_App {
+    public static void main(String[] args) {
+        System.out.println("SpringBoot生效");
+        SpringApplication.run(DeptConsumer_Feign_App.class, args);
+    }
+}
+```
 
+###### 测试
 
+启动7001 8001 feign-80 访问localhost/consumer/dept/list成功
 
+##### 17. 创建microservicecloud-provider-dept-hystrix-8001模块
 
+该模块继承于父模块，用于演示服务提供异常时的服务熔断机制
 
+###### 编写pom文件
 
+```xml
+<dependencies>
+        <dependency>
+            <groupId>cliff.ford</groupId>
+            <artifactId>microservicecloud-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>druid</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter</artifactId>
+            <version>2.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jetty</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>springloaded</artifactId>
+            <version>RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-config</artifactId>
+            <version>2.1.1.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+            <version>2.1.1.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+		# 重点
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+            <version>2.1.1.RELEASE</version>
+        </dependency>
+    </dependencies>
+```
 
+###### 编写application.yml文件
 
+```yml
+# 其他信息照抄microservicecloud-provider-dept-8001模块
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost1:7001/eureka  # 太卡了，改单机
+  instance:
+    instance-id: microservicecloud-dept8001-hystrix   # 这里也改了
+    prefer-ip-address: true                   
+```
+
+src/main/java下面的代码照抄microservicecloud-provider-dept-8001模块，程序入口类改名
+
+###### 注意变更controller
+
+```java
+@GetMapping(value = "/dept/get/{id}")
+//如果该方法出错，用wrongId方法去处理
+@HystrixCommand(fallbackMethod = "wrongId")
+public Dept get(@PathVariable("id") Long id){
+    Dept dept = deptService.get(id);
+    if(dept == null){
+        throw new RuntimeException();
+    }
+    return dept;
+}
+//返回一个可处理的信息给上游
+private Dept wrongId(@PathVariable("id") Long id){
+    return new Dept().setDeptno(id).setDname("该Id:"+id+"没有对应信息--Hystrix")
+        .setDb_source("no database");
+}
+```
+
+###### 调整主启动类
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+@EnableDiscoveryClient
+@EnableCircuitBreaker//开启服务熔断功能
+public class DeptProvider8001_Hystrix_App {
+    public static void main(String[] args) {
+        SpringApplication.run(DeptProvider8001_Hystrix_App.class, args);
+    }
+}
+```
+
+###### 测试
+
+启动7001 hystrix-8001 feign-80,访问localhost/consumer/dept/get/1和localhost/consumer/dept/get/99
 
 
 
