@@ -233,6 +233,12 @@ SpringCloud Config为微服务架构中的微服务提供及集中化的外部�
 * 服务端也称为分布式配置中心，它是一个独立的微服务应用，用来连接配置服务器并为客户端提供获取配置信息，加密/解密信息等访问接口
 * 客户端则是通过指定的配置中心来管理应用资源，以及与业务相关的配置内容，并在启动的时候从配置中心获取和加载配置信息，配置服务器默认采用git来存储配置信息，这样就有助于对环境配置进行版本管理，并且可以通过git客户端工具来方便的管理和访问配置内容
 
+###### bootstrap.yml文件
+
+application.yml是用户级的资源配置项，bootstrap.yml文件是一个系统级的资源配置项，优先级更高
+
+SpringCloud 会创建一个Bootstrap Context作为Spring应用的Application Context的父上下文，初始化的时候，Bootstrap Context负责从外部资源加载配置属性并解析配置，这两个上下文共享一i个从外部获取的Evironment。Bootstrap属性有更高的优先级，他们不会被本地配置项覆盖，Bootstrap Context和Application Context有着不同的约定，所以新增了一个bootstrap.yml文件，保证Bootstrap Context和Application Context配置的分离
+
 <center><h3>分布式项目演示案例</h3></center>
 
 ##### 1. 创建一个空的Project
@@ -1568,3 +1574,160 @@ zuul:
 ```
 
 现在<font color=red>localhost:9527</font>/<font color=blue>microservicecloud-dept</font>/dept/get/2已经不可用了，要这样访问<font color=red>localhost:9527</font>/cliff.ford/<font color=blue>mydept</font>/dept/get/2才行
+
+##### 20. 创建microservicecloud-config-server-3344模块
+
+该模块继承于父模块，用于演示config server从github上面读取配置资源信息
+
+###### 编写pom文件
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-config-server</artifactId>
+        <version>2.1.1.RELEASE</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        <version>2.1.1.RELEASE</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+</dependencies>
+```
+
+###### 编写application.yml文件
+
+```yml
+server:
+  port: 3344
+
+spring:
+  application:
+    name: microservicecloud-config-server
+  cloud:
+    config:
+      server:
+        git:
+          uri: https://github.com/Cliff-Ford/microservicecloud-config.git //配置文件所在的仓库
+```
+
+###### 编写启动类
+
+```java
+@SpringBootApplication
+@EnableConfigServer
+public class Config_3344_App {
+    public static void main(String[] args) {
+        SpringApplication.run(Config_3344_App.class, args);
+    }
+}
+```
+
+###### 测试
+
+注意application.yml文件要自己编写和推送上去
+
+启动并访问localhost:3344/application-dev.yml和localhost:3344/application-test.yml和localhost:3344/application.yml
+
+##### 21. 创建microservicecloud-config-client-3355模块
+
+该模块继承于父模块，用于演示配置中心客户端远程读取资源的案例
+
+###### 编写pom文件
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-config-client</artifactId>
+        <version>RELEASE</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-netflix-eureka-client</artifactId>
+        <version>2.1.1.RELEASE</version>
+    </dependency>
+</dependencies>
+```
+
+编写bootstrap.yml文件
+
+```yml
+spring:
+  cloud:
+    config:
+      name: microservicecloud-config-client # 配置从githut上读取的资源名称，注意没有yml后缀
+      profile: dev  # 本次的配置项
+      label: master
+      uri: http://localhost:3344  # 本次服务启动后先去找3344号服务，通过SpringCloudConfig获取GitHub的服务地址
+```
+
+###### 编写访问控制器
+
+```java
+@RestController
+public class ConfigClientRest {
+    @Value("${spring.application.name}")
+    private String applicationName;
+
+    @Value("${eureka.client.service-url.defaultZone}")
+    private String eurekaServer;
+
+    @Value("${server.port}")
+    private String port;
+
+    @GetMapping(value = "/config")
+    public String getConfig(){
+        return toString();
+    }
+
+    @Override
+    public String toString() {
+        return "ConfigClientRest{" +
+                "applicationName='" + applicationName + '\'' +
+                ", eurekaServer='" + eurekaServer + '\'' +
+                ", port='" + port + '\'' +
+                '}';
+    }
+}
+```
+
+###### 编写启动类
+
+```java
+@SpringBootApplication
+public class Config_3355_App {
+    public static void main(String[] args) {
+        SpringApplication.run(Config_3355_App.class, args);
+    }
+}
+```
+
+###### 测试
+
+启动3344和3355，因为3355说明了从哪个分支下读取哪个环境下的资源文件
+
+访问localhost:8201/config和localhost:8202/config，对比思考
+
+##### 22. 整合Config Server/Client进行案例讲解
+
+这里应该就是启动3344，然后给8001添加Config Client的依赖，将application.yml的内容清空或者注释，配置bootstrap.yml去远端拉取
+
+最终所有的配置都在远端（GitHub），eureka集群启动，服务提供者集群开启（集成了服务熔断），服务消费者集群开启（集成了服务降级），网关zuul开启，监控dashboard开启
