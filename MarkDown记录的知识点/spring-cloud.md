@@ -207,9 +207,31 @@ Hystrix是一个用于处理分布式系统的延迟和容错的开源库，在�
 
 熔断机制的注解时@HystrixCommand
 
+###### 服务降级
 
+客户端针对服务异常不可用时的一种缺省机制，需要配合@FeignClient(value="service-name",fallback=xxxFallBackFactory.class)来处理
 
+##### Zuul知识点
 
+###### Zuul是什么？
+
+Zuul包含了对请求的路由和过滤两个最主要的功能：
+
+* 路由功能负责将外部请求转发到具体的微服务实例上，是实现外部访问统一入口的基础
+* 过滤功能负责对请求的处理过程进行干预，是实现请求校验，服务聚合等功能的基础
+
+Zuul和Eureka进行整合，将Zuul自身注册为Eureka服务治理下的应用，同时从Eureka中获得其他微服务的消息，也即以后的访问微服务都是通过Zuul跳转后获得
+
+##### SpringCloud Config知识点
+
+###### SpringCloud Config是什么？
+
+SpringCloud Config为微服务架构中的微服务提供及集中化的外部配置支持，配置服务器为各个不同微服务应用的所有环境提供了一个中心化的外部配置
+
+###### SpringCloud Config是C-S架构
+
+* 服务端也称为分布式配置中心，它是一个独立的微服务应用，用来连接配置服务器并为客户端提供获取配置信息，加密/解密信息等访问接口
+* 客户端则是通过指定的配置中心来管理应用资源，以及与业务相关的配置内容，并在启动的时候从配置中心获取和加载配置信息，配置服务器默认采用git来存储配置信息，这样就有助于对环境配置进行版本管理，并且可以通过git客户端工具来方便的管理和访问配置内容
 
 <center><h3>分布式项目演示案例</h3></center>
 
@@ -1189,7 +1211,7 @@ public class DeptConsumer_Feign_App {
 
 ##### 17. 创建microservicecloud-provider-dept-hystrix-8001模块
 
-该模块继承于父模块，用于演示服务提供异常时的服务熔断机制
+该模块继承于父模块，<font color=red>用于演示服务提供异常时的服务熔断机制</font>
 
 ###### 编写pom文件
 
@@ -1318,13 +1340,231 @@ public class DeptProvider8001_Hystrix_App {
 
 启动7001 hystrix-8001 feign-80,访问localhost/consumer/dept/get/1和localhost/consumer/dept/get/99
 
+##### 18. 修改microservicecloud-api模块和microservicecloud-consumer-dept-feign-80模块
 
+<font color=red>用于演示服务降级</font>
 
+###### 概念辨析
 
+* 服务提供者利用@HystrixCommand(fallbackMethod = "wrongId")注解提供的异常处理我们叫服务熔断
+* 服务消费者利用@FeignClient(value = "MICROSERVICECLOUD-DEPT", fallbackFactory = DeptClientServiceFallbackFactory.class)注解提供的异常处理我们叫服务降级
 
+###### 服务熔断/降级的场景引入
 
+每一个微服务下面的controller下的方法执行都有可能报错，所以需要给每一个方法都编写一个异常处理方法，这样会让controller异常臃肿，并且业务处理和异常处理耦合了，利用aop的编程思想，同时更深层次思考，如果某一个服务提供者挂掉了，服务熔断就不生效了，这时需要从客户端出发，做一个服务降级处理
 
+###### 修改api模块下的service包
 
+```java
+//添加DeptClientServiceFallbackFactory类，该类实现FallbackFactory<T>接口，T是DeptClientService接口
+@Component
+public class DeptClientServiceFallbackFactory implements FallbackFactory<DeptClientService> {
+    @Override
+    public DeptClientService create(Throwable throwable) {
+        return new DeptClientService() {
+            @Override
+            public boolean add(Dept dept) {
+                return false;
+            }
 
+            @Override
+            public Dept get(Long id) {
+                return new Dept().setDeptno(id).setDname("id:"+id+" can not find any message")
+                        .setDb_source("no database message");
+            }
 
+            @Override
+            public List<Dept> list() {
+                return null;
+            }
+        };
+    }
+}
+```
 
+重新maven clean maven install
+
+###### 修改feign-80模块的application.yml文件
+
+```yml
+# 开启服务降级功能
+feign:
+  hystrix:
+    enabled: true
+```
+
+###### 测试
+
+1. 启动7001 并访问localhost1:7001
+2. 启动8001 并访问localhost:8001/dept/get/1和localhost:8001/dept/get/99，这里说明服务熔断生效
+3. 启动feign-80 并访问localhost/consumer/dept/get/1和localhost/consumer/dept/get/99，这里说明客户端能使服务熔断生效，观察99接口返回的内容
+4. 手动停止8001 并访问localhost/consumer/dept/get/1和localhost/consumer/dept/get/99，这里说明客户端的服务降级生效，注意观察localhost/consumer/dept/get/99返回的内容与上一次的差别，说明服务熔断会先于服务降级之前被处理，这个异常的抛出顺序是相对应的
+
+##### 19. 创建microservicecloud-consumer-hystrix-dashboard-9001模块
+
+该模块继承于父模块，用于监控服务的监控情况
+
+###### 编写pom文件
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>cliff.ford</groupId>
+        <artifactId>microservicecloud-api</artifactId>
+        <version>${project.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+        <version>2.1.1.RELEASE</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-hystrix-dashboard</artifactId>
+        <version>2.1.1.RELEASE</version>
+    </dependency>
+</dependencies>
+```
+
+###### 编写application.yml文件
+
+```yml
+server:
+  port: 9001
+```
+
+###### 编写启动类
+
+```java
+@SpringBootApplication
+@EnableHystrixDashboard
+public class DeptConsumer_DashBoard_App {
+    public static void main(String[] args) {
+        SpringApplication.run(DeptConsumer_DashBoard_App.class, args);
+    }
+}
+```
+
+###### 更改microservicecloud-provider-dept-dept-hystrix-8001模块
+
+确保pom文件添加了如下依赖
+
+```yml
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+```
+
+修改application.yml文件
+
+```yml
+# 添加如下内容
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ["hystrix.stream"]
+```
+
+###### 启动测试
+
+* 启动dashboard-9001并访问http://localhost:9001/hystrix
+* 启动hystrix-8001并依次访问localhost:8001/actuator/hystrix.stream和localhost:8001/dept/get/1和localhost:8001/actuator/hystrix.stream，观察localhost:8001/actuator/hystrix.stream的变化
+* 在http://localhost:9001/hystrix页面填入监控的url：localhost:8001/actuator/hystrix.stream，延迟时间：2000ms，监控名字title: provider-dept-8001，点击monitor stream监控
+* 不断刷新localhost:8001/dept/get/1连接，继续观察监控页面
+
+##### 创建microservicecloud-zuul-9527模块
+
+该模块继承于父模块，用于演示路由网关功能
+
+###### 编写pom文件
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>cliff.ford</groupId>
+        <artifactId>microservicecloud-api</artifactId>
+        <version>${project.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        <version>2.1.1.RELEASE</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-zuul</artifactId>
+        <version>RELEASE</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+        <version>2.1.1.RELEASE</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+</dependencies>
+```
+
+###### 编写applcation.yml文件
+
+```yml
+server:
+  port: 9527
+
+spring:
+  application:
+    name: microservice-zuul-gateway
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost1:7001/eureka
+  instance:
+    instance-id: zuul-gateway
+    prefer-ip-address: true
+
+info:
+  app.name: cliff.ford
+  company.name: cliff.ford
+  build.artifactId: ${project.artifactId}
+  build.version: ${project.version}
+```
+
+###### 编写启动类
+
+```java
+@SpringBootApplication
+@EnableZuulProxy
+public class Zuul_9527_App {
+    public static void main(String[] args) {
+        SpringApplication.run(Zuul_9527_App.class, args);
+    }
+}
+```
+
+###### 测试
+
+启动eureka-7001, dept_hystrix_8001, zuul_9527，并访问localhost:8001/dept/get/1和<font color=red>localhost:9527</font>/<font color=blue>microservicecloud-dept</font>/dept/get/2，后面一个连接红色部分是网关，蓝色部分是服务名，黑色部分是接口地址
+
+###### 变更需求
+
+令真正的服务接口对外不可用，只保留zuul提供的对外访问地址，并且对外访问的地址要屏蔽真正的服务名，此时需要修改zuul_9527模块的application.yml文件
+
+```yml
+zuul:
+  prefix: cliff.ford   # 服务名前的前缀
+  ignored-services: microservicecloud-dept  # 让所有服务名对外不可用，可以用"*"
+  routes:
+    mydept.serviceId: microservicecloud-dept
+    mydept.path: /mydept/**
+```
+
+现在<font color=red>localhost:9527</font>/<font color=blue>microservicecloud-dept</font>/dept/get/2已经不可用了，要这样访问<font color=red>localhost:9527</font>/cliff.ford/<font color=blue>mydept</font>/dept/get/2才行
