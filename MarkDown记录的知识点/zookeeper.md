@@ -61,13 +61,42 @@ Zookeeper数据模型的结构与Unix文件系统很类似，整体上可以看�
 
   在Zookeeper中记录每台服务器的访问数，让访问数最少的服务器去处理最新的客户端请求
 
-##### Zookeeper安装
+##### Zookeeper安装及参数简介
 
-
+* window
+  1. https://archive.apache.org/dist/zookeeper/下载zookeeper-3.4.5
+  2. 解压到D盘
+  3. 将D:\zookeeper-3.4.5\conf\zoo_sample.cfg在当前目录下复制一份并改名为zoo.cfg
+  4. 打开zoo.cfg修改dataDir=D:\\zookeeper-3.4.5-data,该文件用于存放zookeeper快照
+  5. 进入D:\zookeeper-3.4.5\bin启动zkServer.cmd启动zookeeper server
+  6. 进入D:\zookeeper-3.4.5\bin启动zkCli.cmd启动zookeeper client
+  7. 观察D:\zookeeper-3.4.5-data的变化
+* zoo.cfg配置文件参数讲解
+  1. tickTime=2000--->心跳间隔为2s
+  2. initLimit=10--->Leader和Follower之间的启动<font color=red>前</font>最大间隔通讯帧，一帧指一个心跳
+  3. SyncLimit=5--->Leader和Follower之间的启动<font color=red>后</font>最大间隔通讯帧，一帧指一个心跳
+  4. dataDir=D:\\zookeeper-3.4.5-data--->快照存放目录
+  5. ClientPort=2181--->客户端访问端口
 
 ##### Zookeeper内部原理
 
+###### 选举机制
 
+1. 半数机制：集群中半数以上机器存活，集群可用。所以Zookeeper适合安装奇数台服务器
+2. Zookeeper虽然在配置文件中并没有指定Master和Slave。但是Zookeeper工作时是有一个节点作为Leader，其他则为Follower，Leader是通过内部的选举机制临时产生的
+3. 选举细节
+   1. 每台机器首先会给自己投一票尝试让自己成为老大，如果不成功就将票投给id比自己大的机器
+   2. 老大选举出来之后，如果一切正常，后面加进入的机器默认为小弟
+   3. 老大挂掉了，小弟们才可以重新选举
+
+###### 节点类型
+
+* 持久（Persistent）：客户端和服务器端断开连接后，创建的节点不删除
+  * 持久化目录节点
+  * 持久化顺序编号目录节点
+* 短暂（Ephemeral）：客户端和服务器端断开连接后，创建的节点删除
+  * 临时目录节点
+  * 临时顺序编号目录节点
 
 ##### Zookeeper实战
 
