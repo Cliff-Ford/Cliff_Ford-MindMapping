@@ -156,9 +156,135 @@ Zookeeper数据模型的结构与Unix文件系统很类似，整体上可以看�
 2. leader收到一半以上的follower的确认回复之后就会认为数据已经写好了，然后通知第一次的server1
 3. server1收到来自leader的全局数据保存成功之后，会去通知client数据已经写好了
 
-##### Zookeeper实战
+##### Zookeeper实战（动态监听服务器的上下线）
 
+1. 启动zkServer，启动zkCli，创建节点create /servers "servers"
 
+2. 创建maven工程并编写pom文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>cliff.ford</groupId>
+    <artifactId>zookeeper实践</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <dependencies>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>2.11.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.zookeeper</groupId>
+            <artifactId>zookeeper</artifactId>
+            <version>3.5.3-beta</version>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+3. 编写监听客户端zkClient
+
+   ```java
+   public class DistributeClient {
+       private ZooKeeper zkCli;
+       public static void main(String[] args) throws IOException, KeeperException, InterruptedException {
+           DistributeClient client = new DistributeClient();
+           client.getConnect();
+           client.getChildren();
+           client.buiness();
+       }
+   
+       //令程序一直运行
+       private void buiness() throws InterruptedException {
+           Thread.sleep(Long.MAX_VALUE);
+       }
+   
+       private void getChildren() throws KeeperException, InterruptedException {
+           //获取/servers下的节点，并设置一次该路径的监听事件
+           List<String> children = zkCli.getChildren("/servers", true);
+           ArrayList<String> hosts = new ArrayList<String>();
+           for(String child : children){
+               byte[] data = zkCli.getData("/servers/" + child, false, null);
+               hosts.add(new String(data)+child);
+           }
+           System.out.println(hosts);
+       }
+   
+       private void getConnect() throws IOException {
+           //给该zkCli设置监听事件
+           zkCli = new ZooKeeper("localhost:2181", 2000, new Watcher() {
+               public void process(WatchedEvent watchedEvent) {
+                   try {
+                       //监听事件里面设置了监听事件，所以如果程序一直运行，则一直监听
+                       getChildren();
+                   } catch (KeeperException e) {
+                       e.printStackTrace();
+                   } catch (InterruptedException e) {
+                       e.printStackTrace();
+                   }
+               }
+           });
+       }
+   
+   
+   }
+   ```
+
+4. 在cmd界面的zkCli创建删除/servers/xxxx，查看监听程序的反应
+
+5. 编写DistrubuteServer，并执行，查看监听程序的反应，停止运行该程序，查看监听程序的变化
+
+   ```java
+   public class DistributeServer {
+       private String connectString = "localhost:2181";
+       private int sessionTimeout = 2000;
+       private ZooKeeper zkClient;
+   
+       public static void main(String[] args) throws IOException, KeeperException, InterruptedException {
+           DistributeServer server = new DistributeServer();
+           server.getConnect();
+           for(int i = 0; i < 3; i++){
+               server.regist(args[0]);
+           }
+           server.business();
+       }
+   
+       private void business() throws InterruptedException {
+           Thread.sleep(Long.MAX_VALUE);
+       }
+   
+       private void regist(String hostname) throws KeeperException, InterruptedException {
+           String s = zkClient.create("/servers/server", hostname.getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL_SEQUENTIAL);
+           System.out.println(s);
+       }
+   
+       private void getConnect() throws IOException {
+           zkClient = new ZooKeeper(connectString,sessionTimeout,new Watcher(){
+   
+               public void process(WatchedEvent watchedEvent) {
+   
+               }
+           });
+       }
+   }
+   ```
 
 ##### Zookerper面试题
+
+* 监听原理
+* 部署方式（单机和集群）
+* Leader和Follower的关系和转变
+* 集群最少几台（3）（半数原则）
+* 常用命令
 
