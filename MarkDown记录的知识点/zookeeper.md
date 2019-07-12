@@ -98,9 +98,65 @@ Zookeeper数据模型的结构与Unix文件系统很类似，整体上可以看�
   * 临时目录节点
   * 临时顺序编号目录节点
 
+###### zkCli客户端命令介绍
+
+在启动zkServer和zkCli正常连接之后，在zkCli客户端的操作
+
+1. help查看所有可用的命令
+2. ls path---> ls / 注意zookeeper根目录是/，该命令是列举zookeeper下的可用节点，现在是一个
+3. ls2 path ---> ls2 / 更详细的列举zookeeper下的信息
+4. create path data --> create /sanguo "liubei" 在/目录下创建节点sanguo并在该节点下写入数据“liubei"，如果不写入数据，节点不会被创建，注意不可级联创建节点，比如create /xiaoshuo/xiyouji ”sunwukong"，因为西游记上一级节点没有数据
+5. get path ---> get /sanguo 获取指定路径下的数据
+6. create -e /sanguo/wuguo "sunquan"创建短暂类型节点，注意/sanguo节点前面已经创建了，此时quit命令退出，重新连接，查看节点状态发现/wuguo不存在
+7. create -s /sanguo/weiguo "caozao"创建持久型顺序节点weiguo，ls /sanguo查看节点名称变化
+8. set /sanguo/shuguo "liushan" 修改shuguo节点的信息
+9. 另外启动一个zkCli客户端get /sanguo watch 监听/san'guo这个节点的数据变化，注意只有一次有效，用另外一个zkCli set /sanguo "sanguo2"，返回查看信息的变化
+10. delete /sanguo/wuguo 删除指定节点
+
+###### stat结构体
+
+1. czxid-创建节点的事务zxid
+
+   每次修改zookeeper状态都会收到一个zxid形式的时间戳，也就是zookeeper事务id。事务id是zookeeper中所有修改总的次序，每个修改都有唯一的zxid，如果zxid1小于zxid2，那么zxid1发生在zxid2之前
+
+2. ctime-znode被创建的毫秒数（从1970年开始）
+
+3. mzxid-znode最后更新的事务zxid
+
+4. mtime-znode最后修改的毫秒数
+
+5. pZxid-znode最后更新的子节点zxid
+
+6. cversion-znode子节点变化号，znode子节点修改次数
+
+7. dataversion-znode数据变化号
+
+8. aclVersion-znode访问控制列表的变化号
+
+9. ephemeralOwner如果是临时节点，这个是znode拥有者的sessionid，如果不是临时节点，则为0
+
+10. <font color=red>dataLength-znode的数据长度</font>
+
+11. <font color=red>numChildren-znode</font>
+
+###### 监听器原理
+
+1. 首先要有一个main()线程
+2. 在main线程中创建Zookeeper客户端，这时就会创建两个线程，一个负责网络连接通信connect，一个负责监听listener
+3. 通过connect线程将注册的监听时间发送给zookeeper
+4. 在zookeeper的注册监听器列表中将注册的监听事件添加到列表中
+5. zookeeper监听到有数据路径变化，就会将这个消息发送给listener线程
+6. <font color=red>listener线程内部调用了process方法</font>
+
+一般会监听节点数据的变化或者节点增减的变化
+
+###### 写数据流程
+
+1. client项zookeeper的server1上写数据，发送一个写请求，如果server1不是leader，那么server1会把接收到的请求进一步转发给leader，leader广播给下面的follower，下面的follower会去写，写完之后会告诉leader
+2. leader收到一半以上的follower的确认回复之后就会认为数据已经写好了，然后通知第一次的server1
+3. server1收到来自leader的全局数据保存成功之后，会去通知client数据已经写好了
+
 ##### Zookeeper实战
-
-
 
 
 
